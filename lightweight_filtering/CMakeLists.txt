@@ -1,0 +1,90 @@
+cmake_minimum_required (VERSION 2.8)
+project(lightweight_filtering)
+add_definitions(-std=c++11)
+
+##################### Find, include, and compile library #####################
+
+# Attempt to find catkinized kindr
+find_package(kindr QUIET)
+if(NOT kindr_FOUND)
+  # Attempt to find package-based kindr
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(kindr kindr REQUIRED)
+endif()
+
+find_package(Eigen3 REQUIRED)
+
+include_directories(${kindr_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIR})
+include_directories(include)
+
+if(DEFINED CATKIN_DEVEL_PREFIX)
+  find_package(catkin REQUIRED)
+	catkin_package(
+	   INCLUDE_DIRS include ${kindr_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR}
+	)
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gtest/" AND (NOT DEFINED CATKIN_DEVEL_PREFIX))
+	message(STATUS "Building GTests!")
+	option(BUILD_GTEST "build gtest" ON)
+	add_subdirectory(gtest gtest)
+	enable_testing()
+	include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
+
+	# Generate code for the state definitions
+	set(GEN_STATE_DEFS_DIR "${PROJECT_BINARY_DIR}/gen-states")
+	IF (NOT IS_DIRECTORY ${GEN_STATE_DEFS_DIR})
+		FILE(MAKE_DIRECTORY ${GEN_STATE_DEFS_DIR})
+	ENDIF (NOT IS_DIRECTORY ${GEN_STATE_DEFS_DIR})
+
+	add_library(gen_states INTERFACE)
+	add_custom_command (
+		OUTPUT ${GEN_STATE_DEFS_DIR}/test_states.hpp
+		COMMAND python ${PROJECT_SOURCE_DIR}/scripts/render_jinja2.py -i ${PROJECT_SOURCE_DIR}/templates -o ${GEN_STATE_DEFS_DIR}
+		DEPENDS ${PROJECT_SOURCE_DIR}/templates/test_states.hpp.j2 ${PROJECT_SOURCE_DIR}/templates/_macros_library.j2
+		COMMENT "Generating state classes")
+	target_include_directories(gen_states INTERFACE ${GEN_STATE_DEFS_DIR})
+	target_sources(gen_states INTERFACE ${GEN_STATE_DEFS_DIR}/test_states.hpp)
+
+	add_executable(testState src/testState.cpp)
+	target_link_libraries(testState gen_states gtest_main gtest pthread )
+	add_test(testState testState)
+	add_executable(testSigmaPoints src/testSigmaPoints.cpp)
+	target_link_libraries(testSigmaPoints gtest_main gtest pthread )
+	add_test(testSigmaPoints testSigmaPoints)
+	add_executable(testPrediction src/testPrediction.cpp)
+	target_link_libraries(testPrediction gen_states gtest_main gtest pthread )
+	add_test(testPrediction testPrediction)
+	add_executable(testUpdate src/testUpdate.cpp)
+	target_link_libraries(testUpdate gen_states gtest_main gtest pthread )
+	add_test(testUpdate testUpdate)
+	add_executable(testModelBase src/testModelBase.cpp)
+	target_link_libraries(testModelBase gen_states gtest_main gtest pthread )
+	add_test(testModelBase testModelBase)
+	add_executable(testFilterBase src/testFilterBase.cpp)
+	target_link_libraries(testFilterBase gen_states gtest_main gtest pthread )
+	add_test(testFilterBase testFilterBase)
+	add_executable(testGIFPrediction src/testGIFPrediction.cpp)
+	target_link_libraries(testGIFPrediction gen_states gtest_main gtest pthread )
+	add_test(testGIFPrediction testGIFPrediction)
+endif()
+
+# Generate FindLWF.cmake file
+file(WRITE cmake/FindLWF.cmake
+"# This file was automatically generated during the installation of the lightweight_filtering library
+# and can be used through cmake to find the corresponding header files. A copy of this
+# file was created in ${CMAKE_ROOT}/Modules (depending on the CMAKE_ROOT variable).
+
+set(LWF_INCLUDE_DIRS
+${CMAKE_INSTALL_PREFIX}/include/LWF/include
+)
+set(LWF_FOUND TRUE)
+message(\"-- LWF found (include: ${CMAKE_INSTALL_PREFIX}/include/LWF/include)\")
+"
+)
+
+# Setting for make install
+install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_INSTALL_PREFIX}/include/LWF)")
+install(DIRECTORY include DESTINATION ${CMAKE_INSTALL_PREFIX}/include/LWF)
+install(FILES cmake/FindLWF.cmake DESTINATION ${CMAKE_ROOT}/Modules)

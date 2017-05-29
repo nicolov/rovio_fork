@@ -34,83 +34,14 @@
 #include "lightweight_filtering/State.hpp"
 #include "rovio/FilterStates.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
-
-/** \brief Class, defining the innovation.
- */
-class VelocityInnovation: public LWF::State<LWF::VectorElement<3>>{
- public:
-  typedef LWF::State<LWF::VectorElement<3>> Base;
-  using Base::E_;
-  static constexpr unsigned int _vel = 0;
-  VelocityInnovation(){
-    static_assert(_vel+1==E_,"Error with indices");
-    this->template getName<_vel>() = "vel";
-  };
-  virtual ~VelocityInnovation(){};
-  inline V3D& vel(){
-    return this->template get<_vel>();
-  }
-  inline const V3D& vel() const{
-    return this->template get<_vel>();
-  }
-};
-
-/** \brief Class, dummy auxillary class for Zero velocity update
- */
-class VelocityUpdateMeasAuxiliary: public LWF::AuxiliaryBase<VelocityUpdateMeasAuxiliary>{
- public:
-  VelocityUpdateMeasAuxiliary(){
-  };
-  virtual ~VelocityUpdateMeasAuxiliary(){};
-};
-
-/**  \brief Empty measurement
- */
-class VelocityUpdateMeas: public LWF::State<LWF::VectorElement<3>,VelocityUpdateMeasAuxiliary>{
- public:
-  typedef LWF::State<LWF::VectorElement<3>,VelocityUpdateMeasAuxiliary> Base;
-  using Base::E_;
-  static constexpr unsigned int _vel = 0;
-  static constexpr unsigned int _aux = _vel+1;
-  VelocityUpdateMeas(){
-    static_assert(_aux+1==E_,"Error with indices");
-    this->template getName<_vel>() = "vel";
-    this->template getName<_aux>() = "aux";
-  };
-  virtual ~VelocityUpdateMeas(){};
-  inline V3D& vel(){
-    return this->template get<_vel>();
-  }
-  inline const V3D& vel() const{
-    return this->template get<_vel>();
-  }
-};
-
-/**  \brief Class holding the update noise.
- */
-class VelocityUpdateNoise: public LWF::State<LWF::VectorElement<3>>{
- public:
-  typedef LWF::State<LWF::VectorElement<3>> Base;
-  using Base::E_;
-  static constexpr unsigned int _vel = 0;
-  VelocityUpdateNoise(){
-    static_assert(_vel+1==E_,"Error with indices");
-    this->template getName<_vel>() = "vel";
-  };
-  virtual ~VelocityUpdateNoise(){};
-  inline V3D& vel(){
-    return this->template get<_vel>();
-  }
-  inline const V3D& vel() const{
-    return this->template get<_vel>();
-  }
-};
 
 /** \brief Outlier Detection.
  * ODEntry<Start entry, dimension of detection>
  */
-class VelocityOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<VelocityInnovation::template getId<VelocityInnovation::_vel>(),3>>{
+class VelocityOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<VelocityInnovation::vel_idx_,3>>{
  public:
   virtual ~VelocityOutlierDetection(){};
 };
@@ -119,11 +50,10 @@ class VelocityOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<Veloci
 
 /** \brief Class, holding the zero velocity update
  */
-template<typename FILTERSTATE>
-class VelocityUpdate: public LWF::Update<VelocityInnovation,FILTERSTATE,VelocityUpdateMeas,
+class VelocityUpdate: public LWF::Update<VelocityInnovation,rovio::FilterState,VelocityUpdateMeas,
                                          VelocityUpdateNoise,VelocityOutlierDetection,false>{
  public:
-  typedef LWF::Update<VelocityInnovation,FILTERSTATE,VelocityUpdateMeas,
+  typedef LWF::Update<VelocityInnovation,rovio::FilterState,VelocityUpdateMeas,
                       VelocityUpdateNoise,VelocityOutlierDetection,false> Base;
   using Base::doubleRegister_;
   using Base::intRegister_;
@@ -164,7 +94,7 @@ class VelocityUpdate: public LWF::Update<VelocityInnovation,FILTERSTATE,Velocity
    *  @param dt           - Not used.
    */
   void evalInnovation(mtInnovation& y, const mtState& state, const mtNoise& noise) const{
-    y.vel() = qAM_.rotate(state.MvM()) + meas_.vel() + noise.vel(); // Velocity of state has a minus sign
+    y.vel() = qAM_*state.MvM() + meas_.vel() + noise.vel(); // Velocity of state has a minus sign
   }
 
   /** \brief Computes the Jacobian for the update step of the filter.
@@ -176,7 +106,7 @@ class VelocityUpdate: public LWF::Update<VelocityInnovation,FILTERSTATE,Velocity
    */
   void jacState(MXD& F, const mtState& state) const{
     F.setZero();
-    F.template block<3,3>(mtInnovation::template getId<mtInnovation::_vel>(),mtState::template getId<mtState::_vel>()) = MPD(qAM_).matrix();
+    F.template block<3,3>(mtInnovation::vel_idx_,mtState::vel_idx_) = MPD(qAM_).matrix();
   }
 
   /** \brief Computes the Jacobian for the update step of the filter w.r.t. to the noise variables
@@ -188,7 +118,7 @@ class VelocityUpdate: public LWF::Update<VelocityInnovation,FILTERSTATE,Velocity
    */
   void jacNoise(MXD& G, const mtState& state) const{
     G.setZero();
-    G.template block<3,3>(mtInnovation::template getId<mtInnovation::_vel>(),mtNoise::template getId<mtNoise::_vel>()) = Eigen::Matrix3d::Identity();
+    G.template block<3,3>(mtInnovation::vel_idx_,mtNoise::vel_idx_) = Eigen::Matrix3d::Identity();
   }
 };
 

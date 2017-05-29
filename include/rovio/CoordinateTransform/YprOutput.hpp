@@ -32,25 +32,9 @@
 #include "lightweight_filtering/common.hpp"
 #include "lightweight_filtering/CoordinateTransform.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
-
-class AttitudeOutput: public LWF::State<LWF::QuaternionElement>{
- public:
-  static constexpr unsigned int _att = 0;
-  AttitudeOutput(){
-  }
-  virtual ~AttitudeOutput(){};
-};
-
-class YprOutput: public LWF::State<LWF::VectorElement<3>>{
- public:
-  static constexpr unsigned int _ypr = 0;
-  YprOutput(){
-  }
-  virtual ~YprOutput(){};
-
-
-};
 
 class AttitudeToYprCT:public LWF::CoordinateTransform<AttitudeOutput,YprOutput>{
  public:
@@ -60,11 +44,13 @@ class AttitudeToYprCT:public LWF::CoordinateTransform<AttitudeOutput,YprOutput>{
   AttitudeToYprCT(){};
   virtual ~AttitudeToYprCT(){};
   void evalTransform(mtOutput& output, const mtInput& input) const{
-    output.template get<mtOutput::_ypr>() = kindr::EulerAnglesZyxD(input.template get<mtInput::_att>()).vector();
+    output.ypr() = input.att().toRotationMatrix().eulerAngles(2, 1, 0);
   }
   void jacTransform(MXD& J, const mtInput& input) const{
-    kindr::EulerAnglesZyxD zyx(input.template get<mtInput::_att>());
-    J = zyx.getMappingFromLocalAngularVelocityToDiff()*MPD(input.template get<mtInput::_att>().inverted()).matrix();
+    // TODO (nicolov): restore this
+    J.setIdentity();
+//    kindr::EulerAnglesZyxD zyx(input.att());
+//    J = zyx.getMappingFromLocalAngularVelocityToDiff()*MPD(input.att().inverse()).matrix();
   }
 };
 

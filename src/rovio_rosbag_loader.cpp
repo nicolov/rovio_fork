@@ -40,37 +40,7 @@
 #include <boost/date_time/posix_time/posix_time_io.hpp>
 #define foreach BOOST_FOREACH
 
-#ifdef ROVIO_NMAXFEATURE
-static constexpr int nMax_ = ROVIO_NMAXFEATURE;
-#else
-static constexpr int nMax_ = 25; // Maximal number of considered features in the filter state.
-#endif
-
-#ifdef ROVIO_NLEVELS
-static constexpr int nLevels_ = ROVIO_NLEVELS;
-#else
-static constexpr int nLevels_ = 4; // // Total number of pyramid levels considered.
-#endif
-
-#ifdef ROVIO_PATCHSIZE
-static constexpr int patchSize_ = ROVIO_PATCHSIZE;
-#else
-static constexpr int patchSize_ = 8; // Edge length of the patches (in pixel). Must be a multiple of 2!
-#endif
-
-#ifdef ROVIO_NCAM
-static constexpr int nCam_ = ROVIO_NCAM;
-#else
-static constexpr int nCam_ = 1; // Used total number of cameras.
-#endif
-
-#ifdef ROVIO_NPOSE
-static constexpr int nPose_ = ROVIO_NPOSE;
-#else
-static constexpr int nPose_ = 0; // Additional pose states.
-#endif
-
-typedef rovio::RovioFilter<rovio::FilterState<nMax_,nLevels_,patchSize_,nCam_,nPose_>> mtFilter;
+typedef rovio::RovioFilter mtFilter;
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "rovio");
@@ -87,7 +57,7 @@ int main(int argc, char** argv){
   mpFilter->readFromInfo(filter_config);
 
   // Force the camera calibration paths to the ones from ROS parameters.
-  for (unsigned int camID = 0; camID < nCam_; ++camID) {
+  for (unsigned int camID = 0; camID < ROVIO_NCAM; ++camID) {
     std::string camera_config;
     if (nh_private.getParam("camera" + std::to_string(camID)
                             + "_config", camera_config)) {
@@ -97,7 +67,7 @@ int main(int argc, char** argv){
   mpFilter->refreshProperties();
 
   // Node
-  rovio::RovioNode<mtFilter> rovioNode(nh, nh_private, mpFilter);
+  rovio::RovioNode rovioNode(nh, nh_private, mpFilter);
   rovioNode.makeTest();
   double resetTrigger = 0.0;
   nh_private.param("record_odometry", rovioNode.forceOdometryPublishing_, rovioNode.forceOdometryPublishing_);
@@ -138,7 +108,7 @@ int main(int argc, char** argv){
   boost::posix_time::time_facet* facet = new boost::posix_time::time_facet();
   facet->format("%Y-%m-%d-%H-%M-%S");
   stream.imbue(std::locale(std::locale::classic(), facet));
-  stream << ros::Time::now().toBoost() << "_" << nMax_ << "_" << nLevels_ << "_" << patchSize_ << "_" << nCam_  << "_" << nPose_;
+  stream << ros::Time::now().toBoost() << "_" << ROVIO_NMAXFEATURE << "_" << ROVIO_NLEVELS << "_" << ROVIO_PATCHSIZE << "_" << ROVIO_NCAM << "_" << ROVIO_NPOSE;
   std::string filename_out = file_path + "/rovio/" + stream.str();
   nh_private.param("filename_out", filename_out, filename_out);
   std::string rosbag_filename_out = filename_out + ".bag";

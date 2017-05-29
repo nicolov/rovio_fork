@@ -40,130 +40,62 @@
 #include "rovio/ZeroVelocityUpdate.hpp"
 #include "rovio/MultilevelPatchAlignment.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
 
-/** \brief Class, defining the innovation.
- *
- *  @tparam STATE - Filter State
- */
-template<typename STATE>
-class ImgInnovation: public LWF::State<LWF::VectorElement<2>>{
- public:
-  typedef LWF::State<LWF::VectorElement<2>> Base;
-  using Base::E_;
-  static constexpr unsigned int _pix = 0;
-  ImgInnovation(){
-    static_assert(_pix+1==E_,"Error with indices");
-    this->template getName<_pix>() = "pix";
-  };
-  virtual ~ImgInnovation(){};
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/** \brief Class, holding the image pyramids of the different cameras.
- *
- *  @tparam STATE - Filter State
- */
-template<typename STATE>
-class ImgUpdateMeasAuxiliary: public LWF::AuxiliaryBase<ImgUpdateMeasAuxiliary<STATE>>{
- public:
+struct ImgUpdateMeasAuxiliary {
   ImgUpdateMeasAuxiliary(){
     reset(0.0);
   };
-  virtual ~ImgUpdateMeasAuxiliary(){};
   void reset(const double t){
     imgTime_ = t;
-    for(int i=0;i<STATE::nCam_;i++){
+    for(int i=0;i<rovio::conf::nCam;i++){
       isValidPyr_[i] = false;
     }
   }
   bool areAllValid(){
-    for(int i=0;i<STATE::nCam_;i++){
+    for(int i=0;i<rovio::conf::nCam;i++){
       if(isValidPyr_[i] == false) return false;
     }
     return true;
   }
-  ImagePyramid<STATE::nLevels_> pyr_[STATE::nCam_];
-  bool isValidPyr_[STATE::nCam_];
+  ImagePyramid<rovio::conf::nLevels> pyr_[rovio::conf::nCam];
+  bool isValidPyr_[rovio::conf::nCam];
   double imgTime_;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/**  \brief Update measurement class (all data in auxillary)
- *
- *  @tparam STATE - Filter State
- */
-template<typename STATE>
-class ImgUpdateMeas: public LWF::State<ImgUpdateMeasAuxiliary<STATE>>{
- public:
-  typedef LWF::State<ImgUpdateMeasAuxiliary<STATE>> Base;
-  using Base::E_;
-  static constexpr unsigned int _aux = 0;
-  ImgUpdateMeas(){
-    static_assert(_aux+1==E_,"Error with indices");
-  };
-  virtual ~ImgUpdateMeas(){};
-
-  //@{
-  /** \brief Get the auxiliary state of the ImgUpdateMeas.
-   *
-   *  \see ImgUpdateMeasAuxiliary
-   *  @return the the auxiliary state of the ImgUpdateMeas.
-   */
-  inline ImgUpdateMeasAuxiliary<STATE>& aux(){
-    return this->template get<_aux>();
+struct ImgUpdateMeas : public ImgUpdateMeasManifold {
+  inline ImgUpdateMeasAuxiliary& aux() {
+    return this->aux_;
   }
-  inline const ImgUpdateMeasAuxiliary<STATE>& aux() const{
-    return this->template get<_aux>();
+
+  inline const ImgUpdateMeasAuxiliary& aux() const {
+    return this->aux_;
   }
-  //@}
+
+private:
+  ImgUpdateMeasAuxiliary aux_;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/**  \brief Class holding the update noise.
- *
- *  @tparam STATE - Filter State
- */
-template<typename STATE>
-class ImgUpdateNoise: public LWF::State<LWF::VectorElement<2>>{
+class ImgOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<ImgInnovation::pix_idx_,2>>{
  public:
-  typedef LWF::State<LWF::VectorElement<2>> Base;
-  using Base::E_;
-  static constexpr unsigned int _pix = 0;
-  ImgUpdateNoise(){
-    static_assert(_pix+1==E_,"Error with indices");
-    this->template getName<_pix>() = "pix";
-  };
-  virtual ~ImgUpdateNoise(){};
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/** \brief Outlier Detection.
- *
- *  @tparam STATE - Filter State
- */
-template<typename STATE>
-class ImgOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<ImgInnovation<STATE>::template getId<ImgInnovation<STATE>::_pix>(),2>>{
- public:
-  /** \brief Destructor
-   */
   virtual ~ImgOutlierDetection(){};
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/** \brief Class, holding image update routines for the filter.
- */
-template<typename FILTERSTATE>
-class ImgUpdate: public LWF::Update<ImgInnovation<typename FILTERSTATE::mtState>,FILTERSTATE,ImgUpdateMeas<typename FILTERSTATE::mtState>,ImgUpdateNoise<typename FILTERSTATE::mtState>,
-ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
+class ImgUpdate: public LWF::Update<ImgInnovation,
+                                    rovio::FilterState,
+                                    ImgUpdateMeas,
+                                    ImgUpdateNoise,
+                                    ImgOutlierDetection,
+                                    false>{
  public:
-  typedef LWF::Update<ImgInnovation<typename FILTERSTATE::mtState>,FILTERSTATE,ImgUpdateMeas<typename FILTERSTATE::mtState>,ImgUpdateNoise<typename FILTERSTATE::mtState>,
-      ImgOutlierDetection<typename FILTERSTATE::mtState>,false> Base;
+  typedef LWF::Update<ImgInnovation,
+                      rovio::FilterState,
+                      ImgUpdateMeas,
+                      ImgUpdateNoise,
+                      ImgOutlierDetection,
+                      false> Base;
   using Base::meas_;
   using Base::doubleRegister_;
   using Base::intRegister_;
@@ -214,7 +146,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
   bool removeNegativeFeatureAfterUpdate_;
   bool isZeroVelocityUpdateEnabled_; /**<Should zero velocity updates be performed*/
   double minTimeForZeroVelocityUpdate_;  /**<Time until zero velocity update get performed if there is no motion*/
-  ZeroVelocityUpdate<FILTERSTATE> zeroVelocityUpdate_; /**<Zero velocity update, directly integrated into the img update*/
+  ZeroVelocityUpdate zeroVelocityUpdate_; /**<Zero velocity update, directly integrated into the img update*/
   double maxUncertaintyToDepthRatioForDepthInitialization_;
   double updateNoisePix_; /**<Update noise of update pixel, used for indirect case (reprojection error)*/
   double updateNoiseInt_; /**<Update noise of intensity error, used for direct approach*/
@@ -235,7 +167,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
   mutable PixelOutputCT pixelOutputCT_;
   mutable PixelOutput pixelOutput_;
   mutable MXD pixelOutputCov_;
-  mutable rovio::TransformFeatureOutputCT<mtState> transformFeatureOutputCT_;
+  mutable rovio::TransformFeatureOutputCT transformFeatureOutputCT_;
   mutable FeatureOutput featureOutput_;
   mutable MXD featureOutputCov_;
   mutable MXD featureOutputJac_;
@@ -243,7 +175,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
   mutable MultilevelPatch<mtState::nLevels_,mtState::patchSize_> mlpTemp2_;
   mutable FeatureCoordinates alignedCoordinates_;
   mutable FeatureCoordinates tempCoordinates_;
-  mutable std::vector<FeatureCoordinates> candidates_;
+  mutable FeatureCoordinatesVec candidates_;
   mutable cv::Point2f c_temp_;
   mutable Eigen::Matrix2d c_J_;
   mutable Eigen::Matrix2d A_red_;
@@ -420,12 +352,12 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
         }
       }
       if(alignment_.getLinearAlignEquationsReduced(meas_.aux().pyr_[activeCamID],*state.aux().mpCurrentFeature_->mpMultilevelPatch_,featureOutput_.c(),endLevel_,startLevel_,A_red_,b_red_)){
-        y.template get<mtInnovation::_pix>() = b_red_ + noise.template get<mtNoise::_pix>();
+        y.pix() = b_red_ + noise.pix();
         if(verbose_){
           std::cout << "    \033[32mMaking update with feature " << ID << " from camera " << camID << " in camera " << activeCamID << "\033[0m" << std::endl;
         }
       } else {
-        y.template get<mtInnovation::_pix>() = noise.template get<mtNoise::_pix>();
+        y.pix() = noise.pix();
         if(verbose_){
           std::cout << "    \033[31mFailed Construction of Alignment Equations with feature " << ID << " from camera " << camID << " in camera " << activeCamID << "\033[0m" << std::endl;
         }
@@ -435,7 +367,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
       Eigen::Vector2d pixError;
       pixError(0) = static_cast<double>(state.aux().feaCoorMeas_[ID].get_c().x - featureOutput_.c().get_c().x);
       pixError(1) = static_cast<double>(state.aux().feaCoorMeas_[ID].get_c().y - featureOutput_.c().get_c().y);
-      y.template get<mtInnovation::_pix>() = pixError+noise.template get<mtNoise::_pix>();
+      y.pix() = pixError+noise.pix();
     }
   }
 
@@ -574,7 +506,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
    */
   void jacNoise(MXD& G, const mtState& state) const{
     G.setZero();
-    G.template block<2,2>(mtInnovation::template getId<mtInnovation::_pix>(),mtNoise::template getId<mtNoise::_pix>()) = Eigen::Matrix2d::Identity();
+    G.template block<2,2>(mtInnovation::pix_idx_,mtNoise::pix_idx_) = Eigen::Matrix2d::Identity();
   }
 
   /** \brief Prepares the filter state for the update.
@@ -1029,7 +961,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
                   alignedCoordinates_.drawPoint(filterState.img_[otherCam], cv::Scalar(150,0,0));
                   alignedCoordinates_.drawText(filterState.img_[otherCam],std::to_string(f.idx_),cv::Scalar(150,0,0));
                 }
-                if(f.mpCoordinates_->getDepthFromTriangulation(alignedCoordinates_,state.qCM(otherCam).rotate(V3D(state.MrMC(camID)-state.MrMC(otherCam))),state.qCM(otherCam)*state.qCM(camID).inverted(), *f.mpDistance_, 0.01)){
+                if(f.mpCoordinates_->getDepthFromTriangulation(alignedCoordinates_,state.qCM(otherCam) * V3D(state.MrMC(camID)-state.MrMC(otherCam)),state.qCM(otherCam)*state.qCM(camID).inverse(), *f.mpDistance_, 0.01)){
                   filterState.resetFeatureCovariance(*it,initCovFeature_); // TODO: improve
                 }
               } else {
@@ -1062,7 +994,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
     if(verbose_){
       for(int i=0;i<mtState::nCam_;i++){
         std::cout << "Camera extrinsics: " << i << std::endl;
-        std::cout << "  " << filterState.state_.qCM(i) << std::endl;
+        std::cout << "  " << filterState.state_.qCM(i).coeffs() << std::endl;
         std::cout << "  " << filterState.state_.MrMC(i).transpose() << std::endl;
       }
     }
@@ -1077,7 +1009,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
         && doVisualMotionDetection_ && filterState.state_.aux().timeSinceLastImageMotion_ > minTimeForZeroVelocityUpdate_
         && filterState.state_.aux().timeSinceLastInertialMotion_ > minTimeForZeroVelocityUpdate_){
       cv::putText(filterState.img_[0],"Performing Zero Velocity Updates!",cv::Point2f(150,25),cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0,255,255));
-      zeroVelocityUpdate_.performUpdateEKF(filterState,ZeroVelocityUpdateMeas<mtState>());
+      zeroVelocityUpdate_.performUpdateEKF(filterState,ZeroVelocityUpdateMeas());
     }
   }
 
@@ -1099,7 +1031,7 @@ ImgOutlierDetection<typename FILTERSTATE::mtState>,false>{
     cv::Scalar rollColor3(120,120,120);
     cv::circle(filterState.img_[camID],rollCenter,32,rollColor1,-1,8,0);
     cv::circle(filterState.img_[camID],rollCenter,30,rollColor2,-1,8,0);
-    Eigen::Vector3d Vg = (state.qCM(camID)*state.qWM().inverted()).rotate(Eigen::Vector3d(0,0,-1));
+    Eigen::Vector3d Vg = (state.qCM(camID)*state.qWM().inverse()) * Eigen::Vector3d(0,0,-1);
     double roll = atan2(Vg(1),Vg(0))-0.5*M_PI;
     double pitch = acos(Vg.dot(Eigen::Vector3d(0,0,1)))-0.5*M_PI;
     double pixelFor10Pitch = 5.0;

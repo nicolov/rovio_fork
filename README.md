@@ -1,3 +1,12 @@
+### Fork description
+
+- Replaces a bunch of C++ templates in rovio and lightweight_filtering with Python-based code generation (using jinja2).
+This cuts the compilation time by half, and enables code completion.
+
+- Removes the dependency on _ethz-asl/kindr_ which was basically only needed for expmap and logmap
+
+- Checks `lightweight_filtering` into the repo, so it's easier to hack around.
+
 # README #
 
 This repository contains the ROVIO (Robust Visual Inertial Odometry) framework. The code is open-source (BSD License). Please remember that it is strongly coupled to on-going research and thus some parts are not fully mature yet. Furthermore, the code will also be subject to changes in the future which could include greater re-factoring of some parts.

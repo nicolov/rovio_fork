@@ -42,37 +42,7 @@
 #include "rovio/RovioScene.hpp"
 #endif
 
-#ifdef ROVIO_NMAXFEATURE
-static constexpr int nMax_ = ROVIO_NMAXFEATURE;
-#else
-static constexpr int nMax_ = 25; // Maximal number of considered features in the filter state.
-#endif
-
-#ifdef ROVIO_NLEVELS
-static constexpr int nLevels_ = ROVIO_NLEVELS;
-#else
-static constexpr int nLevels_ = 4; // // Total number of pyramid levels considered.
-#endif
-
-#ifdef ROVIO_PATCHSIZE
-static constexpr int patchSize_ = ROVIO_PATCHSIZE;
-#else
-static constexpr int patchSize_ = 6; // Edge length of the patches (in pixel). Must be a multiple of 2!
-#endif
-
-#ifdef ROVIO_NCAM
-static constexpr int nCam_ = ROVIO_NCAM;
-#else
-static constexpr int nCam_ = 1; // Used total number of cameras.
-#endif
-
-#ifdef ROVIO_NPOSE
-static constexpr int nPose_ = ROVIO_NPOSE;
-#else
-static constexpr int nPose_ = 0; // Additional pose states.
-#endif
-
-typedef rovio::RovioFilter<rovio::FilterState<nMax_,nLevels_,patchSize_,nCam_,nPose_>> mtFilter;
+typedef rovio::RovioFilter mtFilter;
 
 #ifdef MAKE_SCENE
 static rovio::RovioScene<mtFilter> mRovioScene;
@@ -98,7 +68,7 @@ int main(int argc, char** argv){
   mpFilter->readFromInfo(filter_config);
 
   // Force the camera calibration paths to the ones from ROS parameters.
-  for (unsigned int camID = 0; camID < nCam_; ++camID) {
+  for (unsigned int camID = 0; camID < ROVIO_NCAM; ++camID) {
     std::string camera_config;
     if (nh_private.getParam("camera" + std::to_string(camID)
                             + "_config", camera_config)) {
@@ -108,7 +78,7 @@ int main(int argc, char** argv){
   mpFilter->refreshProperties();
 
   // Node
-  rovio::RovioNode<mtFilter> rovioNode(nh, nh_private, mpFilter);
+  rovio::RovioNode rovioNode(nh, nh_private, mpFilter);
   rovioNode.makeTest();
 
 #ifdef MAKE_SCENE

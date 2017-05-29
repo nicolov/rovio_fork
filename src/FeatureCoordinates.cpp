@@ -216,7 +216,7 @@ namespace rovio{
   }
 
   bool FeatureCoordinates::getDepthFromTriangulation(const FeatureCoordinates& other, const V3D& C2rC2C1, const QPD& qC2C1, FeatureDistance& d, const double minDistance){
-    const V3D C2v1 = qC2C1.rotate(get_nor().getVec());
+    const V3D C2v1 = qC2C1 * get_nor().getVec();
     const V3D C2v2 = other.get_nor().getVec();
     const double a = 1.0-pow(C2v1.dot(C2v2),2.0);
     if(a < 1e-6){

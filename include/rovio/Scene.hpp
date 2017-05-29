@@ -81,7 +81,7 @@ static Eigen::Matrix4f InitTransform(const Eigen::Vector3f& v,const kindr::Rotat
 
 static Eigen::Matrix4f InitInverseTransform(const Eigen::Vector3f& v,const kindr::RotationQuaternionPF& q){
   Eigen::Matrix4f m = Eigen::Matrix4f::Identity();
-  m.block<3,3>(0,0) = kindr::RotationMatrixPF(q).inverted().matrix();
+  m.block<3,3>(0,0) = kindr::RotationMatrixPF(q).inverse().matrix();
   m.block<3,1>(0,3) = v;
   return m;
 }

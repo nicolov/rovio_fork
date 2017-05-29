@@ -1,0 +1,185 @@
+{% macro attributes(state_def) -%}
+    {% for type_name, field_name in state_def %}
+      {{ type_name }} {{ field_name }}_;
+    {% endfor %}
+{%- endmacro %}
+
+{% macro attributes_idx(state_def) -%}
+    {% for field_type, field_name in state_def %}
+        static constexpr unsigned int {{ field_name }}_idx_ = {% if loop.first %}
+            0;
+        {% else %}
+            {% set prev_field_index = loop.index0 - 1 %}
+            {% set prev_field_name = state_def[prev_field_index][1] %}
+            {% set prev_field_type = state_def[prev_field_index][0] %}
+            {{ prev_field_name }}_idx_ + {{ prev_field_type }}::D_;
+        {% endif %}
+
+        {% if field_type.startswith('LWF::ArrayElement') %}
+            static unsigned int {{ field_name }}_idx(unsigned int i) {
+                return {{ field_name }}_idx_ + i * {{ field_type }}::E_;
+            }
+        {% endif %}
+    {% endfor %}
+{%- endmacro %}
+
+{% macro set_names(state_def) -%}
+    {% for _, field_name in state_def %}
+        {{ field_name }}_.name_ = "{{ field_name }}";
+    {% endfor %}
+{%- endmacro %}
+
+{% macro diff_dimension(state_def) -%}
+    {% if state_def %}
+        {% set last_field_name = state_def[-1][1] %}
+        {% set last_field_type = state_def[-1][0] %}
+        static constexpr unsigned int D_ = {{ last_field_name }}_idx_ + {{ last_field_type }}::D_;
+    {% else %}
+        static constexpr unsigned int D_ = 0;
+    {% endif %}
+
+    typedef Eigen::Matrix<double,D_,1> mtDifVec;
+{%- endmacro %}
+
+{% macro getters_fn(state_def) -%}
+    {% for field_type, field_name in state_def %}
+        {% if field_type.startswith('LWF::ArrayElement') %}
+            inline decltype({{ field_name }}_.get(0))& {{ field_name }}(unsigned int i) {
+                return {{ field_name }}_.get(i);
+            }
+            inline std::remove_reference<decltype({{ field_name }}_.get(0))>::type const & {{ field_name }} (unsigned int i) const {
+                return {{ field_name }}_.get(i);
+            }
+        {% else %}
+            inline decltype({{ field_name }}_.get())& {{ field_name }}() {
+                return {{ field_name }}_.get();
+            }
+            inline std::remove_reference<decltype({{ field_name }}_.get())>::type const & {{ field_name }} () const {
+                return {{ field_name }}_.get();
+            }
+        {% endif %}
+
+    {% endfor %}
+{%- endmacro %}
+
+{% macro print_fn(state_def) -%}
+    inline void print() const {
+        {% for _, field_name in state_def %}
+            {{ field_name }}_.print();
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro set_identity_fn(state_def) -%}
+    inline void setIdentity() {
+        {% for _, field_name in state_def %}
+          {{ field_name }}_.setIdentity();
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro set_random_fn(state_def) -%}
+    inline void setRandom(unsigned int& s) {
+        {% for _, field_name in state_def %}
+          {{ field_name }}_.setRandom(s);
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro fix_fn(state_def) -%}
+    inline void fix() {
+        {% for _, field_name in state_def %}
+          {{ field_name }}_.fix();
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro identity_fn(state_name) -%}
+    static {{ state_name }} Identity(){
+        {{ state_name }} identity;
+        identity.setIdentity();
+        return identity;
+    }
+{%- endmacro %}
+
+{% macro box_plus_fn(state_def, state_name) -%}
+    inline void boxPlus(const mtDifVec& vecIn, {{ state_name }}& stateOut) const {
+        {% for field_type, field_name in state_def %}
+              {{ field_name }}_.boxPlus(
+                vecIn.template block<{{ field_type }}::D_, 1>({{ field_name }}_idx_, 0),
+                stateOut.{{ field_name }}_);
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro box_minus_fn(state_def, state_name) -%}
+    inline void boxMinus(const {{ state_name }}& stateIn, mtDifVec& vecOut) const {
+        {% for field_type, field_name in state_def %}
+            {
+              {{ field_type }}::mtDifVec difVec;
+              {{ field_name }}_.boxMinus(stateIn.{{ field_name }}_, difVec);
+              vecOut.template block<{{ field_type }}::D_, 1>({{ field_name }}_idx_, 0) = difVec;
+            }
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro box_minus_jac_fn(state_def, state_name) -%}
+    inline void boxMinusJac(const {{ state_name }}& stateIn, MXD& matOut) const {
+        matOut.setZero();
+        {% for field_type, field_name in state_def %}
+            {
+              using T = {{ field_type }};
+              MXD mat((unsigned int) T::D_, (unsigned int) T::D_);
+              {{ field_name }}_.boxMinusJac(stateIn.{{ field_name }}_, mat);
+              matOut.template block<T::D_, T::D_>({{ field_name }}_idx_, {{ field_name }}_idx_) = mat;
+            }
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro register_elements_to_property_handler_fn(state_def) -%}
+    void registerElementsToPropertyHandler(LWF::PropertyHandler* mtPropertyHandler, const std::string& str){
+        {% for _, field_name in state_def %}
+            {{ field_name }}_.registerElementToPropertyHandler(mtPropertyHandler,str);
+        {% endfor %}
+    }
+{%- endmacro %}
+
+{% macro register_covariance_to_property_handler_fn(state_def) -%}
+    void registerCovarianceToPropertyHandler_(Eigen::MatrixXd& cov, LWF::PropertyHandler* mpPropertyHandler, const std::string& str){
+        {% for _, field_name in state_def %}
+            {{ field_name }}_.registerCovarianceToPropertyHandler(cov,mpPropertyHandler,str,{{ field_name }}_idx_);
+        {% endfor %}
+    }
+{%- endmacro %}
+
+
+{% macro def_state_class(state_name, state_def) -%}
+    struct {{ state_name }} {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        {{ state_name }} () {
+            {{ set_names(state_def) }}
+        }
+        {{ attributes(state_def) }}
+        {{ attributes_idx(state_def) }}
+
+        {{ diff_dimension(state_def) }}
+
+        {{ print_fn(state_def) }}
+        {{ set_identity_fn(state_def) }}
+        {{ set_random_fn(state_def) }}
+        {{ fix_fn(state_def) }}
+        {{ identity_fn(state_name) }}
+
+        {{ box_plus_fn(state_def, state_name) }}
+        {{ box_minus_fn(state_def, state_name) }}
+        {{ box_minus_jac_fn(state_def, state_name) }}
+
+        {{ register_elements_to_property_handler_fn(state_def) }}
+        {{ register_covariance_to_property_handler_fn(state_def) }}
+
+        {{ getters_fn(state_def) }}
+    };
+{%- endmacro %}

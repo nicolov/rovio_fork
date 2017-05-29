@@ -32,41 +32,20 @@
 #include "lightweight_filtering/common.hpp"
 #include "lightweight_filtering/CoordinateTransform.hpp"
 #include "rovio/MultiCamera.hpp"
+#include "rovio/State.hpp"
+
+#include "rovio_states.hpp"
 
 namespace rovio {
 
-class LandmarkOutput: public LWF::State<LWF::VectorElement<3>>{
+class LandmarkOutputImuCT:public LWF::CoordinateTransform<State,LandmarkOutput>{
  public:
-  static constexpr unsigned int _lmk = 0;
-  LandmarkOutput(){
-    static_assert(_lmk+1==E_,"Error with indices");
-    this->template getName<_lmk>() = "lmk";
-  }
-  virtual ~LandmarkOutput(){};
-
-  //@{
-  /** \brief Get/Set the feature as 3D vector
-   *
-   *  @return a reference to the landmark
-   */
-  inline V3D& lmk(){
-    return this->template get<_lmk>();
-  }
-  inline const V3D& lmk() const{
-    return this->template get<_lmk>();
-  }
-  //@}
-};
-
-template<typename STATE>
-class LandmarkOutputImuCT:public LWF::CoordinateTransform<STATE,LandmarkOutput>{
- public:
-  typedef LWF::CoordinateTransform<STATE,LandmarkOutput> Base;
+  typedef LWF::CoordinateTransform<State,LandmarkOutput> Base;
   typedef typename Base::mtInput mtInput;
   typedef typename Base::mtOutput mtOutput;
   int ID_;
-  MultiCamera<STATE::nCam_>* mpMultiCamera_;
-  LandmarkOutputImuCT(MultiCamera<STATE::nCam_>* mpMultiCamera){
+  MultiCamera<rovio::conf::nCam>* mpMultiCamera_;
+  LandmarkOutputImuCT(MultiCamera<rovio::conf::nCam>* mpMultiCamera){
     mpMultiCamera_ = mpMultiCamera;
     ID_ = -1;
   };
@@ -78,7 +57,7 @@ class LandmarkOutputImuCT:public LWF::CoordinateTransform<STATE,LandmarkOutput>{
     input.updateMultiCameraExtrinsics(mpMultiCamera_);
     // BrBP = BrBC + qCB^T(d_in*nor_in)
     const V3D CrCP = input.dep(ID_).getDistance()*input.CfP(ID_).get_nor().getVec();
-    output.template get<mtOutput::_lmk>() = mpMultiCamera_->BrBC_[input.CfP(ID_).camID_] + mpMultiCamera_->qCB_[input.CfP(ID_).camID_].inverseRotate(CrCP);
+    output.lmk() = mpMultiCamera_->BrBC_[input.CfP(ID_).camID_] + mpMultiCamera_->qCB_[input.CfP(ID_).camID_].inverse()*CrCP;
   }
   void jacTransform(MXD& J, const mtInput& input) const{
     J.setZero();
@@ -86,14 +65,14 @@ class LandmarkOutputImuCT:public LWF::CoordinateTransform<STATE,LandmarkOutput>{
     const V3D CrCP = input.dep(ID_).getDistance()*input.CfP(ID_).get_nor().getVec();
     const Eigen::Matrix<double,3,2> J_CrCP_nor = input.dep(ID_).getDistance()*input.CfP(ID_).get_nor().getM();
     const Eigen::Matrix<double,3,1> J_CrCP_d = input.CfP(ID_).get_nor().getVec()*input.dep(ID_).getDistanceDerivative();
-    const M3D mBC = MPD(mpMultiCamera_->qCB_[input.CfP(ID_).camID_].inverted()).matrix();
+    const M3D mBC = MPD(mpMultiCamera_->qCB_[input.CfP(ID_).camID_].inverse()).matrix();
 
-    J.template block<3,2>(mtOutput::template getId<mtOutput::_lmk>(),mtInput::template getId<mtInput::_fea>(ID_)) = mBC*J_CrCP_nor;
-    J.template block<3,1>(mtOutput::template getId<mtOutput::_lmk>(),mtInput::template getId<mtInput::_fea>(ID_)+2) = mBC*J_CrCP_d;
+    J.template block<3,2>(mtOutput::lmk_idx_,mtInput::fea_idx(ID_)) = mBC*J_CrCP_nor;
+    J.template block<3,1>(mtOutput::lmk_idx_,mtInput::fea_idx(ID_)+2) = mBC*J_CrCP_d;
 
     if(input.aux().doVECalibration_){
-      J.template block<3,3>(mtOutput::template getId<mtOutput::_lmk>(),mtInput::template getId<mtInput::_vep>()) = M3D::Identity();
-      J.template block<3,3>(mtOutput::template getId<mtOutput::_lmk>(),mtInput::template getId<mtInput::_vea>()) = mBC*gSM(CrCP);
+      J.template block<3,3>(mtOutput::lmk_idx_,mtInput::vep_idx(0)) = M3D::Identity();
+      J.template block<3,3>(mtOutput::lmk_idx_,mtInput::vea_idx(0)) = mBC*gSM(CrCP);
     }
   }
 };

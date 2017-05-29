@@ -1,0 +1,152 @@
+{% import '_macros_library.j2' as m %}
+
+#pragma once
+
+#include "lightweight_filtering/State.hpp"
+
+namespace LWFTest {
+
+{{ m.def_state_class("TestState", [
+    ["LWF::ScalarElement", "sca"],
+    ["LWF::VectorElement<3>", "vec0"],
+    ["LWF::VectorElement<3>", "vec1"],
+    ["LWF::VectorElement<3>", "vec2"],
+    ["LWF::VectorElement<3>", "vec3"],
+    ["LWF::ArrayElement<LWF::QuaternionElement, 2>", "qua0"],
+    ["LWF::ArrayElement<LWF::QuaternionElement, 2>", "qua1"],
+]) }}
+
+namespace Nonlinear {
+
+{{ m.def_state_class("State", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+{{ m.def_state_class("UpdateMeas", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+{{ m.def_state_class("UpdateNoise", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "att"],
+]) }}
+
+{{ m.def_state_class("Innovation", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+{{ m.def_state_class("PredictionNoise", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::VectorElement<3>", "att"],
+]) }}
+
+{{ m.def_state_class("PredictionMeas", [
+    ["LWF::VectorElement<3>", "acc"],
+    ["LWF::VectorElement<3>", "gyr"],
+]) }}
+
+{{ m.def_state_class("GIFInnovation", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::VectorElement<3>", "att"],
+]) }}
+
+{{ m.def_state_class("GIFInnovationWithUpdate", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::VectorElement<3>", "att"],
+    ["LWF::VectorElement<3>", "posu"],
+    ["LWF::QuaternionElement", "attu"],
+]) }}
+
+{{ m.def_state_class("GIFNoiseWithUpdate", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::VectorElement<3>", "att"],
+    ["LWF::VectorElement<3>", "posu"],
+    ["LWF::VectorElement<3>", "attu"],
+]) }}
+
+{{ m.def_state_class("GIFMeasWithUpdate", [
+    ["LWF::VectorElement<3>", "acc"],
+    ["LWF::VectorElement<3>", "gyr"],
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+} // namespace Nonlinear
+
+namespace Linear {
+
+{{ m.def_state_class("State", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+]) }}
+
+{{ m.def_state_class("UpdateMeas", [
+    ["LWF::ScalarElement", "hei"],
+    ["LWF::VectorElement<3>", "pos"],
+]) }}
+
+{{ m.def_state_class("UpdateNoise", [
+    ["LWF::ScalarElement", "hei"],
+    ["LWF::VectorElement<3>", "pos"],
+]) }}
+
+{{ m.def_state_class("Innovation", [
+    ["LWF::ScalarElement", "hei"],
+    ["LWF::VectorElement<3>", "pos"],
+]) }}
+
+{{ m.def_state_class("PredictionNoise", [
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acc"],
+]) }}
+
+{{ m.def_state_class("PredictionMeas", [
+    ["LWF::VectorElement<3>", "acc"],
+]) }}
+
+{{ m.def_state_class("GIFInnovation", [
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acc"],
+]) }}
+
+{{ m.def_state_class("GIFInnovationWithUpdate", [
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acc"],
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::ScalarElement", "hei"],
+]) }}
+
+{{ m.def_state_class("GIFNoiseWithUpdate", [
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acc"],
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::ScalarElement", "hei"],
+]) }}
+
+{{ m.def_state_class("GIFMeasWithUpdate", [
+    ["LWF::VectorElement<3>", "acc"],
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::ScalarElement", "hei"],
+]) }}
+
+} // namespace Linear
+
+} // namespace LWFTest

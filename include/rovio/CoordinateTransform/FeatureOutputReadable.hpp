@@ -33,45 +33,9 @@
 #include "lightweight_filtering/CoordinateTransform.hpp"
 #include "rovio/CoordinateTransform/FeatureOutput.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
-
-class FeatureOutputReadable: public LWF::State<LWF::VectorElement<3>,LWF::ScalarElement>{
- public:
-  static constexpr unsigned int _bea = 0;
-  static constexpr unsigned int _dis = _bea+1;
-  FeatureOutputReadable(){
-    static_assert(_dis+1==E_,"Error with indices");
-    this->template getName<_bea>() = "bea";
-    this->template getName<_dis>() = "dis";
-  }
-  virtual ~FeatureOutputReadable(){};
-
-  //@{
-  /** \brief Get/Set the distance parameter
-   *
-   *  @return a reference to distance parameter of the feature.
-   */
-  inline Eigen::Vector3d& bea(){
-    return this->template get<_bea>();
-  }
-  inline const Eigen::Vector3d& bea() const{
-    return this->template get<_bea>();
-  }
-  //@}
-
-  //@{
-  /** \brief Get/Set the feature coordinates
-   *
-   *  @return a reference to the feature coordinates
-   */
-  inline double& dis(){
-    return this->template get<_dis>();
-  }
-  inline const double& dis() const{
-    return this->template get<_dis>();
-  }
-  //@}
-};
 
 class FeatureOutputReadableCT:public LWF::CoordinateTransform<FeatureOutput,FeatureOutputReadable>{
  public:
@@ -86,8 +50,8 @@ class FeatureOutputReadableCT:public LWF::CoordinateTransform<FeatureOutput,Feat
   }
   void jacTransform(MXD& J, const mtInput& input) const{
     J.setZero();
-    J.template block<3,2>(mtOutput::template getId<mtOutput::_bea>(),mtInput::template getId<mtInput::_fea>()) = input.c().get_nor().getM();
-    J(mtOutput::template getId<mtOutput::_dis>(),mtInput::template getId<mtInput::_fea>()+2) = input.d().getDistanceDerivative();
+    J.template block<3,2>(mtOutput::bea_idx_,mtInput::fea_idx_) = input.c().get_nor().getM();
+    J(mtOutput::dis_idx_,mtInput::fea_idx_+2) = input.d().getDistanceDerivative();
   }
 };
 

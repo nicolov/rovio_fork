@@ -58,15 +58,11 @@
 
 namespace rovio {
 
-/** \brief Class, defining the Rovio Node
- *
- *  @tparam FILTER  - \ref rovio::RovioFilter
- */
-template<typename FILTER>
 class RovioNode{
  public:
-  // Filter Stuff
-  typedef FILTER mtFilter;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  typedef RovioFilter mtFilter;
   std::shared_ptr<mtFilter> mpFilter_;
   typedef typename mtFilter::mtFilterState mtFilterState;
   typedef typename mtFilterState::mtState mtState;
@@ -157,6 +153,7 @@ class RovioNode{
   sensor_msgs::PointCloud2 patchMsg_;
   visualization_msgs::Marker markerMsg_;
   sensor_msgs::Imu imuBiasMsg_;
+  sensor_msgs::Image frameMsg_[mtState::nCam_];
   int msgSeq_;
 
   // Rovio outputs and coordinate transformations
@@ -165,10 +162,10 @@ class RovioNode{
   MXD cameraOutputCov_;
   mtOutput imuOutput_;
   MXD imuOutputCov_;
-  CameraOutputCT<mtState> cameraOutputCT_;
-  ImuOutputCT<mtState> imuOutputCT_;
-  rovio::TransformFeatureOutputCT<mtState> transformFeatureOutputCT_;
-  rovio::LandmarkOutputImuCT<mtState> landmarkOutputImuCT_;
+  CameraOutputCT cameraOutputCT_;
+  ImuOutputCT imuOutputCT_;
+  rovio::TransformFeatureOutputCT transformFeatureOutputCT_;
+  rovio::LandmarkOutputImuCT landmarkOutputImuCT_;
   rovio::FeatureOutput featureOutput_;
   rovio::LandmarkOutput landmarkOutput_;
   MXD featureOutputCov_;
@@ -440,8 +437,8 @@ class RovioNode{
    */
   void imuCallback(const sensor_msgs::Imu::ConstPtr& imu_msg){
     std::lock_guard<std::mutex> lock(m_filter_);
-    predictionMeas_.template get<mtPredictionMeas::_acc>() = Eigen::Vector3d(imu_msg->linear_acceleration.x,imu_msg->linear_acceleration.y,imu_msg->linear_acceleration.z);
-    predictionMeas_.template get<mtPredictionMeas::_gyr>() = Eigen::Vector3d(imu_msg->angular_velocity.x,imu_msg->angular_velocity.y,imu_msg->angular_velocity.z);
+    predictionMeas_.acc() = Eigen::Vector3d(imu_msg->linear_acceleration.x,imu_msg->linear_acceleration.y,imu_msg->linear_acceleration.z);
+    predictionMeas_.gyr() = Eigen::Vector3d(imu_msg->angular_velocity.x,imu_msg->angular_velocity.y,imu_msg->angular_velocity.z);
     if(init_state_.isInitialized()){
       mpFilter_->addPredictionMeas(predictionMeas_,imu_msg->header.stamp.toSec());
       updateAndPublish();
@@ -454,7 +451,7 @@ class RovioNode{
         }
         case FilterInitializationState::State::WaitForInitUsingAccel: {
           std::cout << "-- Filter: Initializing using accel. measurement ..." << std::endl;
-          mpFilter_->resetWithAccelerometer(predictionMeas_.template get<mtPredictionMeas::_acc>(),imu_msg->header.stamp.toSec());
+          mpFilter_->resetWithAccelerometer(predictionMeas_.acc(),imu_msg->header.stamp.toSec());
           break;
         }
         default: {
@@ -508,20 +505,20 @@ class RovioNode{
     cv_ptr->image.copyTo(cv_img);
     if(init_state_.isInitialized() && !cv_img.empty()){
       double msgTime = img->header.stamp.toSec();
-      if(msgTime != imgUpdateMeas_.template get<mtImgMeas::_aux>().imgTime_){
+      if(msgTime != imgUpdateMeas_.aux().imgTime_){
         for(int i=0;i<mtState::nCam_;i++){
-          if(imgUpdateMeas_.template get<mtImgMeas::_aux>().isValidPyr_[i]){
+          if(imgUpdateMeas_.aux().isValidPyr_[i]){
             std::cout << "    \033[31mFailed Synchronization of Camera Frames, t = " << msgTime << "\033[0m" << std::endl;
           }
         }
-        imgUpdateMeas_.template get<mtImgMeas::_aux>().reset(msgTime);
+        imgUpdateMeas_.aux().reset(msgTime);
       }
-      imgUpdateMeas_.template get<mtImgMeas::_aux>().pyr_[camID].computeFromImage(cv_img,true);
-      imgUpdateMeas_.template get<mtImgMeas::_aux>().isValidPyr_[camID] = true;
+      imgUpdateMeas_.aux().pyr_[camID].computeFromImage(cv_img,true);
+      imgUpdateMeas_.aux().isValidPyr_[camID] = true;
 
-      if(imgUpdateMeas_.template get<mtImgMeas::_aux>().areAllValid()){
+      if(imgUpdateMeas_.aux().areAllValid()){
         mpFilter_->template addUpdateMeas<0>(imgUpdateMeas_,msgTime);
-        imgUpdateMeas_.template get<mtImgMeas::_aux>().reset(msgTime);
+        imgUpdateMeas_.aux().reset(msgTime);
         updateAndPublish();
       }
     }
@@ -537,7 +534,7 @@ class RovioNode{
       Eigen::Vector3d JrJV(transform->transform.translation.x,transform->transform.translation.y,transform->transform.translation.z);
       poseUpdateMeas_.pos() = JrJV;
       QPD qJV(transform->transform.rotation.w,transform->transform.rotation.x,transform->transform.rotation.y,transform->transform.rotation.z);
-      poseUpdateMeas_.att() = qJV.inverted();
+      poseUpdateMeas_.att() = qJV.inverse();
       mpFilter_->template addUpdateMeas<1>(poseUpdateMeas_,transform->header.stamp.toSec()+mpPoseUpdate_->timeOffset_);
       updateAndPublish();
     }
@@ -554,7 +551,7 @@ class RovioNode{
       poseUpdateMeas_.pos() = JrJV;
 
       QPD qJV(odometry->pose.pose.orientation.w,odometry->pose.pose.orientation.x,odometry->pose.pose.orientation.y,odometry->pose.pose.orientation.z);
-      poseUpdateMeas_.att() = qJV.inverted();
+      poseUpdateMeas_.att() = qJV.inverse();
 
       const Eigen::Matrix<double,6,6> measuredCov = Eigen::Map<const Eigen::Matrix<double,6,6,Eigen::RowMajor>>(odometry->pose.covariance.data());
       poseUpdateMeas_.measuredCov() = measuredCov;
@@ -594,7 +591,7 @@ class RovioNode{
              request.T_WM.position.z);
     QPD qWM(request.T_WM.orientation.w, request.T_WM.orientation.x,
             request.T_WM.orientation.y, request.T_WM.orientation.z);
-    requestResetToPose(WrWM, qWM.inverted());
+    requestResetToPose(WrWM, qWM.inverse());
     return true;
   }
 
@@ -674,12 +671,12 @@ class RovioNode{
           if(mpPoseUpdate_->inertialPoseIndex_ >=0){
             std::cout << "Transformation between inertial frames, IrIW, qWI: " << std::endl;
             std::cout << "  " << state.poseLin(mpPoseUpdate_->inertialPoseIndex_).transpose() << std::endl;
-            std::cout << "  " << state.poseRot(mpPoseUpdate_->inertialPoseIndex_) << std::endl;
+            std::cout << "  " << state.poseRot(mpPoseUpdate_->inertialPoseIndex_).coeffs() << std::endl;
           }
           if(mpPoseUpdate_->bodyPoseIndex_ >=0){
             std::cout << "Transformation between body frames, MrMV, qVM: " << std::endl;
             std::cout << "  " << state.poseLin(mpPoseUpdate_->bodyPoseIndex_).transpose() << std::endl;
-            std::cout << "  " << state.poseRot(mpPoseUpdate_->bodyPoseIndex_) << std::endl;
+            std::cout << "  " << state.poseRot(mpPoseUpdate_->bodyPoseIndex_).coeffs() << std::endl;
           }
         }
 
@@ -731,11 +728,11 @@ class RovioNode{
           odometryMsg_.pose.pose.orientation.y = imuOutput_.qBW().y();
           odometryMsg_.pose.pose.orientation.z = imuOutput_.qBW().z();
           for(unsigned int i=0;i<6;i++){
-            unsigned int ind1 = mtOutput::template getId<mtOutput::_pos>()+i;
-            if(i>=3) ind1 = mtOutput::template getId<mtOutput::_att>()+i-3;
+            unsigned int ind1 = mtOutput::WrWB_idx_+i;
+            if(i>=3) ind1 = mtOutput::qBW_idx_+i-3;
             for(unsigned int j=0;j<6;j++){
-              unsigned int ind2 = mtOutput::template getId<mtOutput::_pos>()+j;
-              if(j>=3) ind2 = mtOutput::template getId<mtOutput::_att>()+j-3;
+              unsigned int ind2 = mtOutput::WrWB_idx_+j;
+              if(j>=3) ind2 = mtOutput::qBW_idx_+j-3;
               odometryMsg_.pose.covariance[j+6*i] = imuOutputCov_(ind1,ind2);
             }
           }
@@ -746,11 +743,11 @@ class RovioNode{
           odometryMsg_.twist.twist.angular.y = imuOutput_.BwWB()(1);
           odometryMsg_.twist.twist.angular.z = imuOutput_.BwWB()(2);
           for(unsigned int i=0;i<6;i++){
-            unsigned int ind1 = mtOutput::template getId<mtOutput::_vel>()+i;
-            if(i>=3) ind1 = mtOutput::template getId<mtOutput::_ror>()+i-3;
+            unsigned int ind1 = mtOutput::BvB_idx_+i;
+            if(i>=3) ind1 = mtOutput::BwWB_idx_+i-3;
             for(unsigned int j=0;j<6;j++){
-              unsigned int ind2 = mtOutput::template getId<mtOutput::_vel>()+j;
-              if(j>=3) ind2 = mtOutput::template getId<mtOutput::_ror>()+j-3;
+              unsigned int ind2 = mtOutput::BvB_idx_+j;
+              if(j>=3) ind2 = mtOutput::BwWB_idx_+j-3;
               odometryMsg_.twist.covariance[j+6*i] = imuOutputCov_(ind1,ind2);
             }
           }
@@ -772,11 +769,11 @@ class RovioNode{
           estimatedPoseWithCovarianceStampedMsg_.pose.pose.orientation.z = imuOutput_.qBW().z();
 
           for(unsigned int i=0;i<6;i++){
-            unsigned int ind1 = mtOutput::template getId<mtOutput::_pos>()+i;
-            if(i>=3) ind1 = mtOutput::template getId<mtOutput::_att>()+i-3;
+            unsigned int ind1 = mtOutput::WrWB_idx_+i;
+            if(i>=3) ind1 = mtOutput::qBW_idx_+i-3;
             for(unsigned int j=0;j<6;j++){
-              unsigned int ind2 = mtOutput::template getId<mtOutput::_pos>()+j;
-              if(j>=3) ind2 = mtOutput::template getId<mtOutput::_att>()+j-3;
+              unsigned int ind2 = mtOutput::WrWB_idx_+j;
+              if(j>=3) ind2 = mtOutput::qBW_idx_+j-3;
               estimatedPoseWithCovarianceStampedMsg_.pose.covariance[j+6*i] = imuOutputCov_(ind1,ind2);
             }
           }
@@ -829,11 +826,11 @@ class RovioNode{
             extrinsicsMsg_[camID].pose.pose.orientation.z = state.qCM(camID).z();
             extrinsicsMsg_[camID].pose.pose.orientation.w = -state.qCM(camID).w();
             for(unsigned int i=0;i<6;i++){
-              unsigned int ind1 = mtState::template getId<mtState::_vep>(camID)+i;
-              if(i>=3) ind1 = mtState::template getId<mtState::_vea>(camID)+i-3;
+              unsigned int ind1 = mtState::vep_idx(camID)+i;
+              if(i>=3) ind1 = mtState::vea_idx(camID)+i-3;
               for(unsigned int j=0;j<6;j++){
-                unsigned int ind2 = mtState::template getId<mtState::_vep>(camID)+j;
-                if(j>=3) ind2 = mtState::template getId<mtState::_vea>(camID)+j-3;
+                unsigned int ind2 = mtState::vep_idx(camID)+j;
+                if(j>=3) ind2 = mtState::vea_idx(camID)+j-3;
                 extrinsicsMsg_[camID].pose.covariance[j+6*i] = cov(ind1,ind2);
               }
             }
@@ -853,12 +850,12 @@ class RovioNode{
           imuBiasMsg_.linear_acceleration.z = state.acb()(2);
           for(int i=0;i<3;i++){
             for(int j=0;j<3;j++){
-              imuBiasMsg_.angular_velocity_covariance[3*i+j] = cov(mtState::template getId<mtState::_gyb>()+i,mtState::template getId<mtState::_gyb>()+j);
+              imuBiasMsg_.angular_velocity_covariance[3*i+j] = cov(mtState::gyb_idx_+i,mtState::gyb_idx_+j);
             }
           }
           for(int i=0;i<3;i++){
             for(int j=0;j<3;j++){
-              imuBiasMsg_.linear_acceleration_covariance[3*i+j] = cov(mtState::template getId<mtState::_acb>()+i,mtState::template getId<mtState::_acb>()+j);
+              imuBiasMsg_.linear_acceleration_covariance[3*i+j] = cov(mtState::acb_idx_+i,mtState::acb_idx_+j);
             }
           }
           pubImuBias_.publish(imuBiasMsg_);
@@ -883,7 +880,7 @@ class RovioNode{
               int camID = filterState.fsm_.features_[i].mpCoordinates_->camID_;
               distance = state.dep(i);
               d = distance.getDistance();
-              const double sigma = sqrt(cov(mtState::template getId<mtState::_fea>(i)+2,mtState::template getId<mtState::_fea>(i)+2));
+              const double sigma = sqrt(cov(mtState::fea_idx(i)+2,mtState::fea_idx(i)+2));
               distance.p_ -= stretchFactor*sigma;
               d_minus = distance.getDistance();
               if(d_minus > 1000) d_minus = 1000;
@@ -895,8 +892,8 @@ class RovioNode{
               Eigen::Vector3d bearingVector = filterState.state_.CfP(i).get_nor().getVec();
               const Eigen::Vector3d CrCPm = bearingVector*d_minus;
               const Eigen::Vector3d CrCPp = bearingVector*d_plus;
-              const Eigen::Vector3f MrMPm = V3D(mpFilter_->multiCamera_.BrBC_[camID] + mpFilter_->multiCamera_.qCB_[camID].inverseRotate(CrCPm)).cast<float>();
-              const Eigen::Vector3f MrMPp = V3D(mpFilter_->multiCamera_.BrBC_[camID] + mpFilter_->multiCamera_.qCB_[camID].inverseRotate(CrCPp)).cast<float>();
+              const Eigen::Vector3f MrMPm = V3D(mpFilter_->multiCamera_.BrBC_[camID] + mpFilter_->multiCamera_.qCB_[camID].inverse()*CrCPm).cast<float>();
+              const Eigen::Vector3f MrMPp = V3D(mpFilter_->multiCamera_.BrBC_[camID] + mpFilter_->multiCamera_.qCB_[camID].inverse()*CrCPp).cast<float>();
 
               // Get human readable output
               transformFeatureOutputCT_.setFeatureID(i);
@@ -910,7 +907,7 @@ class RovioNode{
               landmarkOutputImuCT_.setFeatureID(i);
               landmarkOutputImuCT_.transformState(state,landmarkOutput_);
               landmarkOutputImuCT_.transformCovMat(state,cov,landmarkOutputCov_);
-              const Eigen::Vector3f MrMP = landmarkOutput_.get<LandmarkOutput::_lmk>().template cast<float>();
+              const Eigen::Vector3f MrMP = landmarkOutput_.lmk().template cast<float>();
 
               // Write feature id, camera id, and rgb
               uint8_t gray = 255;

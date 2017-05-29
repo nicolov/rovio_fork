@@ -33,82 +33,23 @@
 #include "lightweight_filtering/Update.hpp"
 #include "lightweight_filtering/State.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
 
-class PoseInnovation: public LWF::State<LWF::VectorElement<3>,LWF::QuaternionElement>{
- public:
-  static constexpr unsigned int _pos = 0;
-  static constexpr unsigned int _att = _pos+1;
-  PoseInnovation(){
-    static_assert(_att+1==E_,"Error with indices");
-  };
-  virtual ~PoseInnovation(){};
-  inline V3D& pos(){
-    return this->template get<_pos>();
-  }
-  inline const V3D& pos() const{
-    return this->template get<_pos>();
-  }
-  inline QPD& att(){
-    return this->template get<_att>();
-  }
-  inline const QPD& att() const{
-    return this->template get<_att>();
-  }
-};
-class PoseUpdateMeas: public LWF::State<LWF::VectorElement<3>,LWF::QuaternionElement>{
- public:
-  static constexpr unsigned int _pos = 0;
-  static constexpr unsigned int _att = _pos+1;
-  Eigen::Matrix<double,6,6> measuredCov_; // Will be used to scale the update covariance according to the measurement
-  PoseUpdateMeas(){
-    static_assert(_att+1==E_,"Error with indices");
-    measuredCov_.setIdentity();
-  };
-  virtual ~PoseUpdateMeas(){};
-  inline V3D& pos(){
-    return this->template get<_pos>();
-  }
-  inline const V3D& pos() const{
-    return this->template get<_pos>();
-  }
-  inline QPD& att(){
-    return this->template get<_att>();
-  }
-  inline const QPD& att() const{
-    return this->template get<_att>();
-  }
-  inline Eigen::Matrix<double,6,6>& measuredCov(){
+struct PoseUpdateMeas : public PoseUpdateMeasManifold {
+  inline Eigen::Matrix<double,6,6>& measuredCov() {
     return measuredCov_;
   }
-  inline const Eigen::Matrix<double,6,6>& measuredCov() const{
+
+  inline const Eigen::Matrix<double,6,6>& measuredCov() const {
     return measuredCov_;
   }
+private:
+  Eigen::Matrix<double,6,6> measuredCov_;
 };
-class PoseUpdateNoise: public LWF::State<LWF::VectorElement<3>,LWF::VectorElement<3>>{
- public:
-  static constexpr unsigned int _pos = 0;
-  static constexpr unsigned int _att = _pos+1;
-  PoseUpdateNoise(){
-    static_assert(_att+1==E_,"Error with indices");
-    this->template getName<_pos>() = "pos";
-    this->template getName<_att>() = "att";
-  };
-  virtual ~PoseUpdateNoise(){};
-  inline V3D& pos(){
-    return this->template get<_pos>();
-  }
-  inline const V3D& pos() const{
-    return this->template get<_pos>();
-  }
-  inline V3D& att(){
-    return this->template get<_att>();
-  }
-  inline const V3D& att() const{
-    return this->template get<_att>();
-  }
-};
-class PoseOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<PoseInnovation::template getId<PoseInnovation::_pos>(),6>>{
+
+class PoseOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<PoseInnovation::pos_idx_,6>>{
  public:
   virtual ~PoseOutlierDetection(){};
 };
@@ -125,10 +66,13 @@ class PoseOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<PoseInnova
  *  @tparam inertialPoseIndex   - Index where the estimated relative pose between inertial frames is stored. Set -1 if this should not be estimated.
  *  @tparam bodyPoseIndex       - Index where the estimated relative pose between body frames is stored. Set -1 if this should not be estimated.
  */
-template<typename FILTERSTATE, int inertialPoseIndex, int bodyPoseIndex>
-class PoseUpdate: public LWF::Update<PoseInnovation,FILTERSTATE,PoseUpdateMeas,PoseUpdateNoise,PoseOutlierDetection,false>{
+
+static constexpr int inertialPoseIndex = -1;
+static constexpr int bodyPoseIndex = -1;
+
+class PoseUpdate: public LWF::Update<PoseInnovation,rovio::FilterState,PoseUpdateMeas,PoseUpdateNoise,PoseOutlierDetection,false>{
  public:
-  typedef LWF::Update<PoseInnovation,FILTERSTATE,PoseUpdateMeas,PoseUpdateNoise,PoseOutlierDetection,false> Base;
+  typedef LWF::Update<PoseInnovation,rovio::FilterState,PoseUpdateMeas,PoseUpdateNoise,PoseOutlierDetection,false> Base;
   using Base::eval;
   using Base::boolRegister_;
   using Base::intRegister_;
@@ -227,15 +171,15 @@ class PoseUpdate: public LWF::Update<PoseInnovation,FILTERSTATE,PoseUpdateMeas,P
     // IrIV = IrIW + qWI^T*(WrWM + qWM*MrMV)
     // qVI = qVM*qWM^T*qWI
     if(enablePosition_){
-      y.pos() = get_IrIW(state) + get_qWI(state).inverseRotate(V3D(state.WrWM()+state.qWM().rotate(get_MrMV(state)))) - meas_.pos() + noise.pos();
+      y.pos() = get_IrIW(state) + get_qWI(state).inverse()*V3D(state.WrWM()+state.qWM() * get_MrMV(state)) - meas_.pos() + noise.pos();
     } else {
       y.pos() = noise.pos();
     }
     if(enableAttitude_){
-      QPD attNoise = attNoise.exponentialMap(noise.att());
-      y.att() = attNoise*get_qVM(state)*state.qWM().inverted()*get_qWI(state)*meas_.att().inverted();
+      QPD attNoise = exp_map(noise.att());
+      y.att() = attNoise*get_qVM(state)*state.qWM().inverse()*get_qWI(state)*meas_.att().inverse();
     } else {
-      QPD attNoise = attNoise.exponentialMap(noise.att());
+      QPD attNoise = exp_map(noise.att());
       y.att() = attNoise;
     }
   }
@@ -243,53 +187,53 @@ class PoseUpdate: public LWF::Update<PoseInnovation,FILTERSTATE,PoseUpdateMeas,P
     F.setZero();
     if(enablePosition_){
       if(!noFeedbackToRovio_){
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(),mtState::template getId<mtState::_pos>()) =
-            MPD(get_qWI(state).inverted()).matrix();
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(),mtState::template getId<mtState::_att>()) =
-            -MPD(get_qWI(state).inverted()).matrix()*gSM(state.qWM().rotate(get_MrMV(state)));
+        F.template block<3,3>(mtInnovation::pos_idx_,mtState::pos_idx_) =
+            MPD(get_qWI(state).inverse()).matrix();
+        F.template block<3,3>(mtInnovation::pos_idx_,mtState::att_idx_) =
+            -MPD(get_qWI(state).inverse()).matrix()*gSM(state.qWM() * get_MrMV(state));
       }
       if(inertialPoseIndex_ >= 0){
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(),mtState::template getId<mtState::_pop>(inertialPoseIndex_)) =
+        F.template block<3,3>(mtInnovation::pos_idx_,mtState::pop_idx(inertialPoseIndex_)) =
             M3D::Identity();
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(),mtState::template getId<mtState::_poa>(inertialPoseIndex_)) =
-            gSM(get_qWI(state).inverseRotate(V3D(state.WrWM()+state.qWM().rotate(get_MrMV(state)))))*MPD(get_qWI(state).inverted()).matrix();
+        F.template block<3,3>(mtInnovation::pos_idx_,mtState::poa_idx(inertialPoseIndex_)) =
+            gSM(get_qWI(state).inverse()*V3D(state.WrWM()+state.qWM()*get_MrMV(state)))*MPD(get_qWI(state).inverse()).matrix();
       }
       if(bodyPoseIndex_ >= 0){
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(),mtState::template getId<mtState::_pop>(bodyPoseIndex_)) =
-            MPD(get_qWI(state).inverted()*state.qWM()).matrix();
+        F.template block<3,3>(mtInnovation::pos_idx_,mtState::pop_idx(bodyPoseIndex_)) =
+            MPD(get_qWI(state).inverse()*state.qWM()).matrix();
       }
     }
     if(enableAttitude_){
       if(!noFeedbackToRovio_){
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_att>(),mtState::template getId<mtState::_att>()) =
-            -MPD(get_qVM(state)*state.qWM().inverted()).matrix();
+        F.template block<3,3>(mtInnovation::att_idx_,mtState::att_idx_) =
+            -MPD(get_qVM(state)*state.qWM().inverse()).matrix();
       }
       if(inertialPoseIndex_ >= 0){
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_att>(),mtState::template getId<mtState::_poa>(inertialPoseIndex_)) =
-            MPD(get_qVM(state)*state.qWM().inverted()).matrix();
+        F.template block<3,3>(mtInnovation::att_idx_,mtState::poa_idx(inertialPoseIndex_)) =
+            MPD(get_qVM(state)*state.qWM().inverse()).matrix();
       }
       if(bodyPoseIndex_ >= 0){
-        F.template block<3,3>(mtInnovation::template getId<mtInnovation::_att>(),mtState::template getId<mtState::_poa>(bodyPoseIndex_)) =
+        F.template block<3,3>(mtInnovation::att_idx_,mtState::poa_idx(bodyPoseIndex_)) =
             M3D::Identity();
       }
     }
   }
   void jacNoise(MXD& G, const mtState& state) const{
     G.setZero();
-    G.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(),mtNoise::template getId<mtNoise::_pos>()) = M3D::Identity();
-    G.template block<3,3>(mtInnovation::template getId<mtInnovation::_att>(),mtNoise::template getId<mtNoise::_att>()) = M3D::Identity();
+    G.template block<3,3>(mtInnovation::pos_idx_,mtNoise::pos_idx_) = M3D::Identity();
+    G.template block<3,3>(mtInnovation::att_idx_,mtNoise::att_idx_) = M3D::Identity();
   }
   void preProcess(mtFilterState& filterstate, const mtMeas& meas, bool& isFinished){
     mtState& state = filterstate.state_;
     isFinished = false;
     if(!didAlignment_ && doInertialAlignmentAtStart_){
       // qWI = qWM*qVM^T*qVI;
-      qWI_ = state.qWM()*get_qVM(state).inverted()*meas.att();
+      qWI_ = state.qWM()*get_qVM(state).inverse()*meas.att();
       if(inertialPoseIndex_ >= 0){
         state.poseRot(inertialPoseIndex_) = qWI_;
       }
       // IrIW = IrIV - qWI^T*(WrWM + qWM*MrMV);
-      IrIW_ = meas.pos() - qWI_.inverseRotate(V3D(state.WrWM() + state.qWM().rotate(get_MrMV(state))));
+      IrIW_ = meas.pos() - qWI_.inverse()*V3D(state.WrWM() + state.qWM() * get_MrMV(state));
       if(inertialPoseIndex_ >= 0){
         state.poseLin(inertialPoseIndex_) = IrIW_;
       }
@@ -304,8 +248,8 @@ class PoseUpdate: public LWF::Update<PoseInnovation,FILTERSTATE,PoseUpdateMeas,P
       // When either position or attitude are disabled, we need to make sure that the covariance matrix is block-diagonal,
       // otherwise the unused covariance block would affect the used one when inverting later on.
       if (enablePosition_ != enableAttitude_) {
-        updnoiP_.template block<3,3>(mtInnovation::template getId<mtInnovation::_att>(), mtInnovation::template getId<mtInnovation::_pos>()).setZero();
-        updnoiP_.template block<3,3>(mtInnovation::template getId<mtInnovation::_pos>(), mtInnovation::template getId<mtInnovation::_att>()).setZero();
+        updnoiP_.template block<3,3>(mtInnovation::att_idx_, mtInnovation::pos_idx_).setZero();
+        updnoiP_.template block<3,3>(mtInnovation::pos_idx_, mtInnovation::att_idx_).setZero();
       }
     } else {
       updnoiP_ = defaultUpdnoiP_;
@@ -318,9 +262,9 @@ class PoseUpdate: public LWF::Update<PoseInnovation,FILTERSTATE,PoseUpdateMeas,P
     mtState& state = filterstate.state_;
     isFinished = true;
     // WrWC = qWI*(IrIV - qWI^T*qWM*MrMV -IrIW) +qWM*MrMC
-    state.aux().poseMeasLin_ = get_qWI(state).rotate(V3D(meas.pos()-(get_qWI(state).inverted()*state.qWM()).rotate(get_MrMV(state))-get_IrIW(state)))+state.template get<mtState::_att>().rotate(state.MrMC(0));
+    state.aux().poseMeasLin_ = get_qWI(state)*V3D(meas.pos()-(get_qWI(state).inverse()*state.qWM())*get_MrMV(state)-get_IrIW(state))+state.att()*state.MrMC(0);
     // qCW = qCM*qVM^T*qVI*qWI^T;
-    state.aux().poseMeasRot_ = state.qCM(0)*get_qVM(state).inverted()*meas.att()*get_qWI(state).inverted();
+    state.aux().poseMeasRot_ = state.qCM(0)*get_qVM(state).inverse()*meas.att()*get_qWI(state).inverse();
   }
 };
 

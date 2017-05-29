@@ -11,6 +11,15 @@ add_definitions(-DROVIO_NCAM=${ROVIO_NCAM})
 add_definitions(-DROVIO_NLEVELS=${ROVIO_NLEVELS})
 add_definitions(-DROVIO_PATCHSIZE=${ROVIO_PATCHSIZE})
 add_definitions(-DROVIO_NPOSE=${ROVIO_NPOSE})
+add_definitions(-DCMAKE_BUILD_TYPE=Release)
+
+# Noisily default to Release build
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
 
 add_subdirectory(lightweight_filtering)
 
@@ -51,6 +60,21 @@ else()
   message(STATUS "No yaml_cpp_catkin, using yaml-cpp system library instead.")
   pkg_check_modules(YamlCpp REQUIRED yaml-cpp>=0.5)
 endif()
+
+# Generate code for the state definitions
+set(GEN_STATE_DEFS_DIR "${PROJECT_BINARY_DIR}/gen-states")
+IF (NOT IS_DIRECTORY ${GEN_STATE_DEFS_DIR})
+	FILE(MAKE_DIRECTORY ${GEN_STATE_DEFS_DIR})
+ENDIF (NOT IS_DIRECTORY ${GEN_STATE_DEFS_DIR})
+
+add_library(rovio_gen_states INTERFACE)
+add_custom_command (
+		OUTPUT ${GEN_STATE_DEFS_DIR}/rovio_states.hpp
+		COMMAND python ${PROJECT_SOURCE_DIR}/lightweight_filtering/scripts/render_jinja2.py -i ${PROJECT_SOURCE_DIR}/src -o ${GEN_STATE_DEFS_DIR}
+		DEPENDS ${PROJECT_SOURCE_DIR}/src/rovio_states.hpp.j2 ${PROJECT_SOURCE_DIR}/lightweight_filtering/templates/_macros_library.j2
+		COMMENT "Generating state classes")
+target_include_directories(rovio_gen_states INTERFACE ${GEN_STATE_DEFS_DIR})
+target_sources(rovio_gen_states INTERFACE ${GEN_STATE_DEFS_DIR}/rovio_states.hpp)
 
 
 ##################### Install ROS stuff #####################
@@ -101,15 +125,16 @@ catkin_package(
 include_directories(include ${catkin_INCLUDE_DIRS} ${YamlCpp_INCLUDE_DIRS})
 
 if(MAKE_SCENE)
-	add_library(${PROJECT_NAME} src/rovio_node.cpp src/Camera.cpp src/FeatureCoordinates.cpp src/FeatureDistance.cpp src/Scene.cpp)
+	add_library(${PROJECT_NAME} src/Camera.cpp src/FeatureCoordinates.cpp src/FeatureDistance.cpp src/Scene.cpp)
 else()
-	add_library(${PROJECT_NAME} src/rovio_node.cpp src/Camera.cpp src/FeatureCoordinates.cpp src/FeatureDistance.cpp)
+	add_library(${PROJECT_NAME} src/Camera.cpp src/FeatureCoordinates.cpp src/FeatureDistance.cpp)
 endif()
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${YamlCpp_LIBRARIES} ${OpenMP_EXE_LINKER_FLAGS} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${GLEW_LIBRARY})
 add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} rovio_generate_messages_cpp)
+target_link_libraries(${PROJECT_NAME} rovio_gen_states)
 
 add_executable(rovio_node src/rovio_node.cpp)
-target_link_libraries(rovio_node ${PROJECT_NAME})
+target_link_libraries(rovio_node ${PROJECT_NAME} rovio_gen_states)
 
 add_executable(rovio_rosbag_loader src/rovio_rosbag_loader.cpp)
 target_link_libraries(rovio_rosbag_loader ${PROJECT_NAME})

@@ -34,66 +34,13 @@
 #include "lightweight_filtering/State.hpp"
 #include "rovio/FilterStates.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
-
-/** \brief Class, defining the innovation.
- */
-template<typename STATE>
-class ZeroVelocityInnovation: public LWF::State<LWF::VectorElement<3>>{
- public:
-  typedef LWF::State<LWF::VectorElement<3>> Base;
-  using Base::E_;
-  static constexpr unsigned int _vel = 0;
-  ZeroVelocityInnovation(){
-    static_assert(_vel+1==E_,"Error with indices");
-    this->template getName<_vel>() = "vel";
-  };
-  virtual ~ZeroVelocityInnovation(){};
-};
-
-/** \brief Class, dummy auxillary class for Zero velocity update
- */
-class ZeroVelocityUpdateMeasAuxiliary: public LWF::AuxiliaryBase<ZeroVelocityUpdateMeasAuxiliary>{
- public:
-  ZeroVelocityUpdateMeasAuxiliary(){
-  };
-  virtual ~ZeroVelocityUpdateMeasAuxiliary(){};
-};
-
-/**  \brief Empty measurement
- */
-template<typename STATE>
-class ZeroVelocityUpdateMeas: public LWF::State<ZeroVelocityUpdateMeasAuxiliary>{
- public:
-  typedef LWF::State<ZeroVelocityUpdateMeasAuxiliary> Base;
-  using Base::E_;
-  static constexpr unsigned int _aux = 0;
-  ZeroVelocityUpdateMeas(){
-    static_assert(_aux+1==E_,"Error with indices");
-    this->template getName<_aux>() = "aux";
-  };
-  virtual ~ZeroVelocityUpdateMeas(){};
-};
-
-/**  \brief Class holding the update noise.
- */
-template<typename STATE>
-class ZeroVelocityUpdateNoise: public LWF::State<LWF::VectorElement<3>>{
- public:
-  typedef LWF::State<LWF::VectorElement<3>> Base;
-  using Base::E_;
-  static constexpr unsigned int _vel = 0;
-  ZeroVelocityUpdateNoise(){
-    static_assert(_vel+1==E_,"Error with indices");
-    this->template getName<_vel>() = "vel";
-  };
-  virtual ~ZeroVelocityUpdateNoise(){};
-};
 
 /** \brief Outlier Detection.
  */
-template<typename STATE>
-class ZeroVelocityOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<ZeroVelocityInnovation<STATE>::template getId<ZeroVelocityInnovation<STATE>::_vel>(),3>>{
+class ZeroVelocityOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<ZeroVelocityInnovation::vel_idx_,3>>{
  public:
   virtual ~ZeroVelocityOutlierDetection(){};
 };
@@ -102,12 +49,15 @@ class ZeroVelocityOutlierDetection: public LWF::OutlierDetection<LWF::ODEntry<Ze
 
 /** \brief Class, holding the zero velocity update
  */
-template<typename FILTERSTATE>
-class ZeroVelocityUpdate: public LWF::Update<ZeroVelocityInnovation<typename FILTERSTATE::mtState>,FILTERSTATE,ZeroVelocityUpdateMeas<typename FILTERSTATE::mtState>,
-ZeroVelocityUpdateNoise<typename FILTERSTATE::mtState>,ZeroVelocityOutlierDetection<typename FILTERSTATE::mtState>,false>{
+class ZeroVelocityUpdate: public LWF::Update<ZeroVelocityInnovation,
+                                             rovio::FilterState,
+                                             ZeroVelocityUpdateMeas,
+                                             ZeroVelocityUpdateNoise,
+                                             ZeroVelocityOutlierDetection,
+                                             false>{
  public:
-  typedef LWF::Update<ZeroVelocityInnovation<typename FILTERSTATE::mtState>,FILTERSTATE,ZeroVelocityUpdateMeas<typename FILTERSTATE::mtState>,
-      ZeroVelocityUpdateNoise<typename FILTERSTATE::mtState>,ZeroVelocityOutlierDetection<typename FILTERSTATE::mtState>,false> Base;
+  typedef LWF::Update<ZeroVelocityInnovation,rovio::FilterState,ZeroVelocityUpdateMeas,
+      ZeroVelocityUpdateNoise,ZeroVelocityOutlierDetection,false> Base;
   using Base::doubleRegister_;
   using Base::intRegister_;
   typedef typename Base::mtState mtState;
@@ -142,7 +92,7 @@ ZeroVelocityUpdateNoise<typename FILTERSTATE::mtState>,ZeroVelocityOutlierDetect
    *  @param dt           - Not used.
    */
   void evalInnovation(mtInnovation& y, const mtState& state, const mtNoise& noise) const{
-    y.template get<mtInnovation::_vel>() = state.MvM()+noise.template get<mtInnovation::_vel>();
+    y.vel() = state.MvM()+noise.vel();
   }
 
   /** \brief Computes the Jacobian for the update step of the filter.
@@ -154,7 +104,7 @@ ZeroVelocityUpdateNoise<typename FILTERSTATE::mtState>,ZeroVelocityOutlierDetect
    */
   void jacState(MXD& F, const mtState& state) const{
     F.setZero();
-    F.template block<3,3>(mtInnovation::template getId<mtInnovation::_vel>(),mtState::template getId<mtState::_vel>()) = Eigen::Matrix3d::Identity();
+    F.template block<3,3>(mtInnovation::vel_idx_,mtState::vel_idx_) = Eigen::Matrix3d::Identity();
   }
 
   /** \brief Computes the Jacobian for the update step of the filter w.r.t. to the noise variables
@@ -166,7 +116,7 @@ ZeroVelocityUpdateNoise<typename FILTERSTATE::mtState>,ZeroVelocityOutlierDetect
    */
   void jacNoise(MXD& G, const mtState& state) const{
     G.setZero();
-    G.template block<3,3>(mtInnovation::template getId<mtInnovation::_vel>(),mtNoise::template getId<mtNoise::_vel>()) = Eigen::Matrix3d::Identity();
+    G.template block<3,3>(mtInnovation::vel_idx_,mtNoise::vel_idx_) = Eigen::Matrix3d::Identity();
   }
 };
 

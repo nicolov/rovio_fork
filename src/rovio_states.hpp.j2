@@ -1,0 +1,126 @@
+{% import '_macros_library.j2' as m %}
+
+#pragma once
+
+#include "lightweight_filtering/State.hpp"
+#include "rovio/RobocentricFeatureElement.hpp"
+#include "rovio/configuration.hpp"
+
+namespace rovio {
+
+{{ m.def_state_class("PoseInnovation", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+{{ m.def_state_class("PoseUpdateMeasManifold", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+{{ m.def_state_class("PoseUpdateNoise", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "att"],
+]) }}
+
+{{ m.def_state_class("ZeroVelocityInnovation", [
+    ["LWF::VectorElement<3>", "vel"],
+]) }}
+
+{{ m.def_state_class("ZeroVelocityUpdateNoise", [
+    ["LWF::VectorElement<3>", "vel"],
+]) }}
+
+{{ m.def_state_class("ZeroVelocityUpdateMeas",
+    [],
+) }}
+
+{{ m.def_state_class("VelocityInnovation", [
+    ["LWF::VectorElement<3>", "vel"],
+]) }}
+
+{{ m.def_state_class("VelocityUpdateNoise", [
+    ["LWF::VectorElement<3>", "vel"],
+]) }}
+
+{{ m.def_state_class("VelocityUpdateMeas", [
+    ["LWF::VectorElement<3>", "vel"],
+]) }}
+
+{{ m.def_state_class("PredictionMeas", [
+    ["LWF::VectorElement<3>", "acc"],
+    ["LWF::VectorElement<3>", "gyr"],
+]) }}
+
+{{ m.def_state_class("ImgInnovation", [
+    ["LWF::VectorElement<2>", "pix"],
+]) }}
+
+{{ m.def_state_class("ImgUpdateNoise", [
+    ["LWF::VectorElement<2>", "pix"],
+]) }}
+
+{{ m.def_state_class("ImgUpdateMeasManifold",
+    [],
+) }}
+
+{{ m.def_state_class("PredictionNoise", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::VectorElement<3>", "att"],
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nCam>", "vep"],
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nCam>", "vea"],
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nMax>", "fea"],
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nPose>", "pop"],
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nPose>", "poa"],
+]) }}
+
+{{ m.def_state_class("StateManifold", [
+    ["LWF::VectorElement<3>", "pos"],
+    ["LWF::VectorElement<3>", "vel"],
+    ["LWF::VectorElement<3>", "acb"],
+    ["LWF::VectorElement<3>", "gyb"],
+    ["LWF::QuaternionElement", "att"],
+
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nCam>", "vep"],
+    ["LWF::ArrayElement<LWF::QuaternionElement, conf::nCam>", "vea"],
+    ["LWF::ArrayElement<rovio::RobocentricFeatureElement, conf::nMax>", "fea"],
+    ["LWF::ArrayElement<LWF::VectorElement<3>, conf::nPose>", "pop"],
+    ["LWF::ArrayElement<LWF::QuaternionElement, conf::nPose>", "poa"],
+]) }}
+
+{{ m.def_state_class("FeatureOutputManifold", [
+    ["RobocentricFeatureElement", "fea"],
+]) }}
+
+{{ m.def_state_class("AttitudeOutput", [
+    ["LWF::QuaternionElement", "att"],
+]) }}
+
+{{ m.def_state_class("YprOutput", [
+    ["LWF::VectorElement<3>", "ypr"],
+]) }}
+
+{{ m.def_state_class("FeatureOutputReadable", [
+    ["LWF::VectorElement<3>", "bea"],
+    ["LWF::ScalarElement", "dis"],
+]) }}
+
+{{ m.def_state_class("PixelOutputManifold", [
+    ["LWF::VectorElement<2>", "pix"],
+]) }}
+
+{{ m.def_state_class("StandardOutput", [
+    ["LWF::VectorElement<3>", "WrWB"],
+    ["LWF::VectorElement<3>", "BvB"],
+    ["LWF::VectorElement<3>", "BwWB"],
+    ["LWF::QuaternionElement", "qBW"],
+]) }}
+
+{{ m.def_state_class("LandmarkOutput", [
+    ["LWF::VectorElement<3>", "lmk"],
+]) }}
+
+}

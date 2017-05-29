@@ -33,16 +33,13 @@
 #include "lightweight_filtering/CoordinateTransform.hpp"
 #include "rovio/CoordinateTransform/FeatureOutput.hpp"
 
+#include "rovio_states.hpp"
+
 namespace rovio {
 
-class PixelOutput: public LWF::State<LWF::VectorElement<2>>{
- public:
-  static constexpr unsigned int _pix = 0;
-  PixelOutput(){
-  }
-  virtual ~PixelOutput(){};
+struct PixelOutput: public PixelOutputManifold{
   cv::Point2f getPoint2f() const{
-    return cv::Point2f(static_cast<float>(this->get<_pix>()(0)),static_cast<float>(this->get<_pix>()(1)));
+    return cv::Point2f(static_cast<float>(this->pix()(0)),static_cast<float>(this->pix()(1)));
   }
 };
 
@@ -56,11 +53,11 @@ class PixelOutputCT:public LWF::CoordinateTransform<FeatureOutput,PixelOutput>{
   virtual ~PixelOutputCT(){};
   void evalTransform(mtOutput& output, const mtInput& input) const{
     cv::Point2f c = input.c().get_c();
-    output.template get<mtOutput::_pix>() = Eigen::Vector2d(c.x,c.y);
+    output.pix() = Eigen::Vector2d(c.x,c.y);
   }
   void jacTransform(MXD& J, const mtInput& input) const{
     J.setZero();
-    J.template block<2,2>(mtOutput::template getId<mtOutput::_pix>(),mtInput::template getId<mtInput::_fea>()) = input.c().get_J();
+    J.template block<2,2>(mtOutput::pix_idx_,mtInput::fea_idx_) = input.c().get_J();
   }
 };
 

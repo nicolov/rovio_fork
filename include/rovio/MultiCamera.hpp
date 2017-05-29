@@ -91,10 +91,10 @@ class MultiCamera{
       // DrDP = qDC*(d_in*nor_in-CrCD)
       // d_out = ||DrDP||
       // nor_out = DrDP/d_out
-      const QPD qDC = qCB_[i]*qCB_[vecIn.camID_].inverted();
-      const V3D CrCD = qCB_[vecIn.camID_].rotate(V3D(BrBC_[i]-BrBC_[vecIn.camID_]));
+      const QPD qDC = qCB_[i]*qCB_[vecIn.camID_].inverse();
+      const V3D CrCD = qCB_[vecIn.camID_]*V3D(BrBC_[i]-BrBC_[vecIn.camID_]);
       const V3D CrCP = dIn.getDistance()*vecIn.get_nor().getVec();
-      const V3D DrDP = qDC.rotate(V3D(CrCP-CrCD));
+      const V3D DrDP = qDC * V3D(CrCP-CrCD);
       dOut.setParameter(DrDP.norm());
       vecOut.nor_.setFromVector(DrDP);
       vecOut.valid_c_ = false;

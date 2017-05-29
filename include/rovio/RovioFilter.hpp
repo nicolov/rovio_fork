@@ -39,20 +39,10 @@
 #include "rovio/MultiCamera.hpp"
 
 namespace rovio {
-/** \brief Class, defining the Rovio Filter.
- *
- *  @tparam FILTERSTATE - \ref rovio::FilterState
- */
-template<typename FILTERSTATE>
-class RovioFilter:public LWF::FilterBase<ImuPrediction<FILTERSTATE>,
-                                         ImgUpdate<FILTERSTATE>,
-                                         PoseUpdate<FILTERSTATE,(int)(FILTERSTATE::mtState::nPose_>0)-1,(int)(FILTERSTATE::mtState::nPose_>1)*2-1>,
-                                         VelocityUpdate<FILTERSTATE>>{
+
+class RovioFilter:public LWF::FilterBase<ImuPrediction,ImgUpdate,PoseUpdate,VelocityUpdate>{
  public:
-  typedef LWF::FilterBase<ImuPrediction<FILTERSTATE>,
-                          ImgUpdate<FILTERSTATE>,
-                          PoseUpdate<FILTERSTATE,(int)(FILTERSTATE::mtState::nPose_>0)-1,(int)(FILTERSTATE::mtState::nPose_>1)*2-1>,
-                          VelocityUpdate<FILTERSTATE>> Base;
+  typedef LWF::FilterBase<ImuPrediction,ImgUpdate,PoseUpdate,VelocityUpdate> Base;
   using Base::init_;
   using Base::reset;
   using Base::predictionTimeline_;
@@ -97,15 +87,15 @@ class RovioFilter:public LWF::FilterBase<ImuPrediction<FILTERSTATE>,
       doubleRegister_.removeScalarByVar(init_.state_.MrMC(camID)(0));
       doubleRegister_.removeScalarByVar(init_.state_.MrMC(camID)(1));
       doubleRegister_.removeScalarByVar(init_.state_.MrMC(camID)(2));
-      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).toImplementation().w());
-      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).toImplementation().x());
-      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).toImplementation().y());
-      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).toImplementation().z());
+      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).w());
+      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).x());
+      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).y());
+      doubleRegister_.removeScalarByVar(init_.state_.qCM(camID).z());
       for(int j=0;j<3;j++){
-        doubleRegister_.removeScalarByVar(init_.cov_(mtState::template getId<mtState::_vep>(camID)+j,mtState::template getId<mtState::_vep>(camID)+j));
-        doubleRegister_.removeScalarByVar(init_.cov_(mtState::template getId<mtState::_vea>(camID)+j,mtState::template getId<mtState::_vea>(camID)+j));
-        doubleRegister_.registerScalar("Init.Covariance.vep",init_.cov_(mtState::template getId<mtState::_vep>(camID)+j,mtState::template getId<mtState::_vep>(camID)+j));
-        doubleRegister_.registerScalar("Init.Covariance.vea",init_.cov_(mtState::template getId<mtState::_vea>(camID)+j,mtState::template getId<mtState::_vea>(camID)+j));
+        doubleRegister_.removeScalarByVar(init_.cov_(mtState::vep_idx(camID)+j,mtState::vep_idx(camID)+j));
+        doubleRegister_.removeScalarByVar(init_.cov_(mtState::vea_idx(camID)+j,mtState::vea_idx(camID)+j));
+        doubleRegister_.registerScalar("Init.Covariance.vep",init_.cov_(mtState::vep_idx(camID)+j,mtState::vep_idx(camID)+j));
+        doubleRegister_.registerScalar("Init.Covariance.vea",init_.cov_(mtState::vea_idx(camID)+j,mtState::vea_idx(camID)+j));
       }
       doubleRegister_.registerVector("Camera" + std::to_string(camID) + ".MrMC",init_.state_.MrMC(camID));
       doubleRegister_.registerQuaternion("Camera" + std::to_string(camID) + ".qCM",init_.state_.qCM(camID));
@@ -114,47 +104,47 @@ class RovioFilter:public LWF::FilterBase<ImuPrediction<FILTERSTATE>,
       doubleRegister_.removeScalarByVar(init_.state_.poseLin(i)(0));
       doubleRegister_.removeScalarByVar(init_.state_.poseLin(i)(1));
       doubleRegister_.removeScalarByVar(init_.state_.poseLin(i)(2));
-      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).toImplementation().w());
-      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).toImplementation().x());
-      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).toImplementation().y());
-      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).toImplementation().z());
+      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).w());
+      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).x());
+      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).y());
+      doubleRegister_.removeScalarByVar(init_.state_.poseRot(i).z());
       for(int j=0;j<3;j++){
-        doubleRegister_.removeScalarByVar(init_.cov_(mtState::template getId<mtState::_pop>(i)+j,mtState::template getId<mtState::_pop>(i)+j));
-        doubleRegister_.removeScalarByVar(init_.cov_(mtState::template getId<mtState::_poa>(i)+j,mtState::template getId<mtState::_poa>(i)+j));
+        doubleRegister_.removeScalarByVar(init_.cov_(mtState::pop_idx(i)+j,mtState::pop_idx(i)+j));
+        doubleRegister_.removeScalarByVar(init_.cov_(mtState::poa_idx(i)+j,mtState::poa_idx(i)+j));
       }
     }
     if(std::get<1>(mUpdates_).inertialPoseIndex_>=0){
       std::get<1>(mUpdates_).doubleRegister_.registerVector("IrIW",init_.state_.poseLin(std::get<1>(mUpdates_).inertialPoseIndex_));
       std::get<1>(mUpdates_).doubleRegister_.registerQuaternion("qWI",init_.state_.poseRot(std::get<1>(mUpdates_).inertialPoseIndex_));
       for(int j=0;j<3;j++){
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_IrIW",init_.cov_(mtState::template getId<mtState::_pop>(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtState::template getId<mtState::_pop>(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_qWI",init_.cov_(mtState::template getId<mtState::_poa>(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtState::template getId<mtState::_poa>(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_IrIW",mPrediction_.prenoiP_(mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_pop>(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_pop>(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_qWI",mPrediction_.prenoiP_(mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_poa>(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_poa>(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_IrIW",init_.cov_(mtState::pop_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtState::pop_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_qWI",init_.cov_(mtState::poa_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtState::poa_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_IrIW",mPrediction_.prenoiP_(mtPrediction::mtNoise::pop_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtPrediction::mtNoise::pop_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_qWI",mPrediction_.prenoiP_(mtPrediction::mtNoise::poa_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j,mtPrediction::mtNoise::poa_idx(std::get<1>(mUpdates_).inertialPoseIndex_)+j));
       }
     }
     if(std::get<1>(mUpdates_).bodyPoseIndex_>=0){
       std::get<1>(mUpdates_).doubleRegister_.registerVector("MrMV",init_.state_.poseLin(std::get<1>(mUpdates_).bodyPoseIndex_));
       std::get<1>(mUpdates_).doubleRegister_.registerQuaternion("qVM",init_.state_.poseRot(std::get<1>(mUpdates_).bodyPoseIndex_));
       for(int j=0;j<3;j++){
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_MrMV",init_.cov_(mtState::template getId<mtState::_pop>(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtState::template getId<mtState::_pop>(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_qVM",init_.cov_(mtState::template getId<mtState::_poa>(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtState::template getId<mtState::_poa>(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_MrMV",mPrediction_.prenoiP_(mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_pop>(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_pop>(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
-        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_qVM",mPrediction_.prenoiP_(mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_poa>(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtPrediction::mtNoise::template getId<mtPrediction::mtNoise::_poa>(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_MrMV",init_.cov_(mtState::pop_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtState::pop_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("init_cov_qVM",init_.cov_(mtState::poa_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtState::poa_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_MrMV",mPrediction_.prenoiP_(mtPrediction::mtNoise::pop_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtPrediction::mtNoise::pop_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
+        std::get<1>(mUpdates_).doubleRegister_.registerScalar("pre_cov_qVM",mPrediction_.prenoiP_(mtPrediction::mtNoise::poa_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j,mtPrediction::mtNoise::poa_idx(std::get<1>(mUpdates_).bodyPoseIndex_)+j));
       }
     }
     int ind;
-    for(int i=0;i<FILTERSTATE::mtState::nMax_;i++){
-      ind = mtState::template getId<mtState::_fea>(i);
+    for(int i=0;i<FilterState::mtState::nMax_;i++){
+      ind = mtState::fea_idx(i);
       doubleRegister_.removeScalarByVar(init_.cov_(ind,ind));
       doubleRegister_.removeScalarByVar(init_.cov_(ind+1,ind+1));
-      ind = mtState::template getId<mtState::_fea>(i)+2;
+      ind = mtState::fea_idx(i)+2;
       doubleRegister_.removeScalarByVar(init_.cov_(ind,ind));
       doubleRegister_.removeScalarByVar(init_.state_.dep(i).p_);
-      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.toImplementation().w());
-      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.toImplementation().x());
-      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.toImplementation().y());
-      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.toImplementation().z());
+      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.w());
+      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.x());
+      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.y());
+      doubleRegister_.removeScalarByVar(init_.state_.CfP(i).nor_.q_.z());
       std::get<0>(mUpdates_).intRegister_.registerScalar("statLocalQualityRange",init_.fsm_.features_[i].mpStatistics_->localQualityRange_);
       std::get<0>(mUpdates_).intRegister_.registerScalar("statLocalVisibilityRange",init_.fsm_.features_[i].mpStatistics_->localVisibilityRange_);
       std::get<0>(mUpdates_).intRegister_.registerScalar("statMinGlobalQualityRange",init_.fsm_.features_[i].mpStatistics_->minGlobalQualityRange_);
@@ -185,7 +175,7 @@ class RovioFilter:public LWF::FilterBase<ImuPrediction<FILTERSTATE>,
         multiCamera_.cameras_[camID].load(cameraCalibrationFile_[camID]);
       }
     }
-    for(int i=0;i<FILTERSTATE::mtState::nMax_;i++){
+    for(int i=0;i<FilterState::mtState::nMax_;i++){
       init_.state_.dep(i).setType(depthTypeInt_);
     }
   };
@@ -226,9 +216,8 @@ class RovioFilter:public LWF::FilterBase<ImuPrediction<FILTERSTATE>,
    *  @param camID -  ID of the considered camera.
    */
   void setExtrinsics(const Eigen::Matrix3d& R_CM, const Eigen::Vector3d& CrCM, const int camID = 0){
-    kindr::RotationMatrixD R(R_CM);
-    init_.state_.aux().qCM_[camID] = QPD(R);
-    init_.state_.aux().MrMC_[camID] = -init_.state_.aux().qCM_[camID].inverseRotate(CrCM);
+    init_.state_.aux().qCM_[camID] = QPD(R_CM);
+    init_.state_.aux().MrMC_[camID] = -(init_.state_.aux().qCM_[camID].inverse()*CrCM);
   }
 };
 
